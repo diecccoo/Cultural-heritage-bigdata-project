@@ -29,3 +29,4 @@ query = (parsed.writeStream
 )
 
 query.awaitTermination()
+
