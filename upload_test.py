@@ -9,43 +9,35 @@ from botocore.exceptions import ClientError
 
 # === CONFIG ===
 bucket_name = "heritage-scans"
-image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Image_created_with_a_mobile_phone.png/640px-Image_created_with_a_mobile_phone.png"
+image_url = "https://homepages.cae.wisc.edu/~ece533/images/airplane.png"  # usa questo per ora
+headers = {"User-Agent": "CulturalHeritageBot/1.0 (https://your-university.it)"}
 object_key = str(uuid.uuid4()) + ".jpg"
 
-# === CONNECT TO MINIO ===
-s3 = boto3.client(
-    "s3",
+# === SETUP MINIO CLIENT ===
+s3 = boto3.client("s3",
     endpoint_url="http://localhost:9000",
     aws_access_key_id="minio",
     aws_secret_access_key="minio123"
 )
 
-# === CREATE BUCKET IF NOT EXISTS ===
+# === CREA BUCKET SE NON ESISTE ===
 try:
     s3.head_bucket(Bucket=bucket_name)
 except ClientError:
-    print(f"ℹ️ Bucket '{bucket_name}' non trovato. Creazione...")
+    print(f"📂 Creo bucket '{bucket_name}'...")
     s3.create_bucket(Bucket=bucket_name)
 
-# === DOWNLOAD IMAGE IN MEMORY AND UPLOAD TO MINIO ===
+# === SCARICA IMMAGINE IN RAM ===
+print("⬇️ Download immagine da:", image_url)
+response = requests.get(image_url, stream=True, headers=headers)
+response.raise_for_status()
+img_data = BytesIO(response.content)
 
+# === UPLOAD SU MINIO ===
+print("⬆️ Upload su MinIO come:", object_key)
+s3.upload_fileobj(img_data, bucket_name, object_key)
 
-try:
-    headers = {"User-Agent": "CulturalHeritageBot/1.0 (https://www.unitn.it/it)"}
-    response = requests.get(image_url, stream=True, headers=headers)
-except Exception as e:
-    print(f"❌ Errore nel download: {e}")
-    exit(1)
-
-# response = requests.get(image_url, stream=True)
-# if response.status_code == 200:
-#     s3.upload_fileobj(BytesIO(response.content), bucket_name, object_key)
-#     print(f"✅ Immagine caricata come {object_key}")
-# else:
-#     print("❌ Errore nel download dell'immagine.")
-#     exit(1)
-
-# === PREPARE MESSAGE FOR KAFKA ===
+# === INVIA MESSAGGIO SU KAFKA ===
 record = {
     "scanId": object_key[:-4],
     "uri": f"s3://{bucket_name}/{object_key}",
@@ -53,7 +45,6 @@ record = {
     "mime": "image/jpeg"
 }
 
-# === SEND TO KAFKA ===
 producer = KafkaProducer(
     bootstrap_servers="localhost:9092",
     value_serializer=lambda v: json.dumps(v).encode()
@@ -64,3 +55,4 @@ producer.flush()
 
 print("📤 Kafka message inviato:")
 print(json.dumps(record, indent=2))
+print("✅ Upload e invio completati con successo.")
