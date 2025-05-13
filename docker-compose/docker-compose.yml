@@ -13,12 +13,10 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CREATE_TOPICS: "new-scans:1:1"
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-
-
 
   minio:
     image: minio/minio
@@ -34,9 +32,9 @@ services:
 
   spark:
     image: bitnami/spark:latest 
+    user: root
     environment:
       - SPARK_MODE=master
-      - SPARK_SUBMIT_OPTIONS=--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
     ports:
       - "7077:7077"
       - "8080:8080"
@@ -51,6 +49,20 @@ services:
       - SPARK_MASTER_URL=spark://spark:7077
     ports:
       - "8081:8081"
+
+  spark-job:
+    image: bitnami/spark:latest
+    user: root
+    depends_on:
+      - spark
+      - kafka
+    entrypoint:
+      - spark-submit
+      - --packages
+      - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0
+      - /opt/bitnami/spark-apps/spark_stream.py
+    volumes:
+      - ./spark-apps:/opt/bitnami/spark-apps
 
 volumes:
   minio-data:
