@@ -1,1 +1,6 @@
 pyspark
+json
+uuid
+time
+kafka
+boto3
