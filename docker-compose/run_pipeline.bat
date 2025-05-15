@@ -19,7 +19,8 @@ start cmd /k "docker-compose exec spark spark-submit --packages org.apache.spark
 
 REM === STEP 5: Send a test message to Kafka topic new-scans ===
 echo [5] Sending automatic test message to Kafka...
-echo {^"scanId^":^"999^", ^"uri^":^"http://auto-message.com/test.jpg^", ^"timestamp^":^"2025-05-14T12:00^", ^"mime^":^"image/png^"} | docker-compose exec -T kafka kafka-console-producer --broker-list kafka:9092 --topic new-scans
+REM echo {^"scanId^":^"999^", ^"uri^":^"http://auto-message.com/test.jpg^", ^"timestamp^":^"2025-05-14T12:00^", ^"mime^":^"image/png^"} | docker-compose exec -T kafka kafka-console-producer --broker-list kafka:9092 --topic new-scans
+echo {"scanId":"123", "uri":"http://example.com/image.png", "timestamp":"2025-05-14T15:00", "mime":"image/png"} | docker-compose exec -T kafka kafka-console-producer --broker-list kafka:9092 --topic new-scans
 
 REM === STEP 6: Notify user ===
 echo [READY] Spark is listening and test message was sent.
