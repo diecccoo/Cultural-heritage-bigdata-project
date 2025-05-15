@@ -4,3 +4,5 @@ uuid
 time
 kafka
 boto3
+minio
+requests
