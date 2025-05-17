@@ -3,6 +3,7 @@ import requests
 import json
 from io import BytesIO
 from minio import Minio
+from kafka import KafkaProducer
 
 # --- Config ---
 API_KEY = "ianlefuck"
@@ -26,7 +27,16 @@ url = f"https://api.europeana.eu/record/v2/search.json?wskey={API_KEY}&query={QU
 response = requests.get(url)
 results = response.json().get("items", [])
 
+
+# --- Kafka Producer ---
+producer = KafkaProducer(
+    bootstrap_servers='localhost:9092',
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+
 print(f"Found {len(results)} items for topic '{QUERY}'")
+
 
 # --- Upload images + metadata ---
 for i, item in enumerate(results):
@@ -35,20 +45,27 @@ for i, item in enumerate(results):
         print(f"[!] Skipping item {i} — no image found.")
         continue
 
-    try:
-        # Download image
-        img_response = requests.get(img_url, stream=True)
-        img_data = BytesIO(img_response.content)
-        img_name = f"{QUERY}/images/{QUERY}_{i}.jpg"
-        client.put_object(
-            bucket_name=BUCKET,
-            object_name=img_name,
-            data=img_data,
-            length=len(img_response.content),
-            content_type="image/jpeg"
-        )
+    # Define image and metadata paths
+    img_name = f"{QUERY}/images/{QUERY}_{i}.jpg"
+    json_name = f"{QUERY}/metadata/{QUERY}_{i}.json"
 
-        # Prepare metadata
+    try:
+        # --- Check and upload image ---
+        try:
+            client.stat_object(BUCKET, img_name)
+            print(f"[i] Skipping existing image: {img_name}")
+        except:
+            img_response = requests.get(img_url, stream=True)
+            img_data = BytesIO(img_response.content)
+            client.put_object(
+                bucket_name=BUCKET,
+                object_name=img_name,
+                data=img_data,
+                length=len(img_response.content),
+                content_type="image/jpeg"
+            )
+
+        # --- Prepare metadata ---
         metadata = {
             "title": item.get("title", [""])[0],
             "creator": item.get("dcCreator", [""])[0],
@@ -58,17 +75,24 @@ for i, item in enumerate(results):
             "timestamp_created": item.get("timestamp_created", ""),
             "dataProvider": item.get("dataProvider", [""])[0]
         }
-        json_data = BytesIO(json.dumps(metadata, indent=2).encode("utf-8"))
-        json_name = f"{QUERY}/metadata/{QUERY}_{i}.json"
-        client.put_object(
-            bucket_name=BUCKET,
-            object_name=json_name,
-            data=json_data,
-            length=len(json_data.getbuffer()),
-            content_type="application/json"
-        )
+
+        # --- Check and upload metadata ---
+        try:
+            client.stat_object(BUCKET, json_name)
+            print(f"[i] Skipping existing metadata: {json_name}")
+        except:
+            json_data = BytesIO(json.dumps(metadata, indent=2).encode("utf-8"))
+            client.put_object(
+                bucket_name=BUCKET,
+                object_name=json_name,
+                data=json_data,
+                length=len(json_data.getbuffer()),
+                content_type="application/json"
+            )
+            producer.send('europeana-metadata', value=metadata)
+            producer.flush()
 
         print(f"[✓] Uploaded: {img_name} and {json_name}")
 
     except Exception as e:
-        print(f"[!] Error on item {i}: {e}")
+        print(f"[!] Failed on item {i}: {e}")
