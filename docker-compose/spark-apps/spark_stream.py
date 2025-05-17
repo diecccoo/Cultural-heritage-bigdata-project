@@ -57,7 +57,7 @@ joined_df = scanner_df.join(meta_df, on="guid", how="inner")
 query = joined_df.writeStream \
     .outputMode("append") \
     .format("parquet") \
-    .option("path", "s3a://europeana-data/scanne-metadata/") \
+    .option("path", "s3a://europeana-data/scanner-metadata/") \
     .option("checkpointLocation", "/tmp/checkpoints/scanner-metadata") \
     .start()
 
