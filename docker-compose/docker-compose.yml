@@ -1,11 +1,13 @@
 
 services:
   zookeeper:
+    container_name: zookeeper
     image: confluentinc/cp-zookeeper:7.5.3
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
+    container_name: kafka
     image: confluentinc/cp-kafka:7.5.3
     depends_on:
       - zookeeper
@@ -20,6 +22,7 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
 
   minio:
+    container_name: minio
     image: minio/minio
     command: server /data --console-address ":9001"
     environment:
@@ -32,6 +35,7 @@ services:
       - minio-data:/data
 
   spark:
+    container_name: spark
     image: bitnami/spark:latest 
     user: root
     environment:
@@ -43,6 +47,7 @@ services:
       - ./spark-apps:/opt/bitnami/spark-apps
 
   spark-worker:
+    container_name: spark-worker
     image: bitnami/spark:latest
     depends_on: [spark]
     environment:
@@ -52,6 +57,7 @@ services:
       - "8081:8081"
 
   spark-job:
+    container_name: spark-job
     image: bitnami/spark:latest
     user: root
     depends_on:
