@@ -70,6 +70,23 @@ services:
       - /opt/bitnami/spark-apps/spark_stream.py
     volumes:
       - ./spark-apps:/opt/bitnami/spark-apps
+      - spark-checkpoints:/tmp/checkpoints  
+
+  ingestion-job:
+    container_name: ingestion-job
+    build:
+      context: ./spark-apps
+      dockerfile: Dockerfile.ingestion
+    image: python:3.10-slim
+    depends_on:
+      - kafka
+      - minio
+    volumes:
+      - ./spark-apps:/app
+    working_dir: /app
+    entrypoint: ["python", "multi_ingest.py"]
+    restart: on-failure  # opzionale: riavvia se fallisce
 
 volumes:
-  minio-data:
+    minio-data:
+    spark-checkpoints:

@@ -4,6 +4,10 @@ import json
 from io import BytesIO
 from minio import Minio
 from kafka import KafkaProducer
+import time
+from kafka.errors import NoBrokersAvailable
+
+
 
 # --- Config ---
 API_KEY = "ianlefuck"
@@ -12,11 +16,12 @@ BUCKET = "europeana-data"
 
 # --- Init MinIO client ---
 client = Minio(
-    "localhost:9000",
+    "minio:9000",
     access_key="minio",
     secret_key="minio123",
     secure=False
 )
+
 
 # --- Ensure bucket exists ---
 if not client.bucket_exists(BUCKET):
@@ -28,11 +33,19 @@ response = requests.get(url)
 results = response.json().get("items", [])
 
 
-# --- Kafka Producer ---
-producer = KafkaProducer(
-    bootstrap_servers='localhost:9092',
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
-)
+# --- Retry KafkaProducer until available ---
+for i in range(10):
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers='kafka:9092',
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        break
+    except NoBrokersAvailable:
+        print(f"[!] Kafka not available yet. Retry {i+1}/10")
+        time.sleep(5)
+else:
+    raise RuntimeError("❌ Could not connect to Kafka after multiple retries")
 
 
 print(f"Found {len(results)} items for topic '{QUERY}'")
@@ -92,7 +105,7 @@ for i, item in enumerate(results):
             producer.send('europeana-metadata', value=metadata)
             producer.flush()
 
-        print(f"[✓] Uploaded: {img_name} and {json_name}")
+        print(f"[✓] Present: {img_name} and {json_name}")
 
     except Exception as e:
-        print(f"[!] Failed on item {i}: {e}")
+        print(f"[X] Failed on item {i}: {e}")
