@@ -1,3 +1,4 @@
 minio
 kafka-python
 requests
+pyarrow

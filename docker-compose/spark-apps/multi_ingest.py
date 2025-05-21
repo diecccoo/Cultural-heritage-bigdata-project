@@ -1,5 +1,6 @@
 import subprocess
 
+
 with open("queries.txt", "r") as f:
     queries = [line.strip() for line in f if line.strip()]
 
