@@ -104,6 +104,13 @@ services:
       - minio
       - spark-master
 
+  mqtt-kafka-bridge:
+    build: ./mqtt-kafka-bridge
+    depends_on:
+      - mqtt
+      - kafka
+    restart: always
+
 
 volumes:
   pgdata:
