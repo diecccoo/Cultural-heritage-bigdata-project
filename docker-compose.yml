@@ -102,6 +102,8 @@ services:
       - redis
       - postgres
       - minio
+      - spark-master
+
 
 volumes:
   pgdata:
