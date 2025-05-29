@@ -2,12 +2,14 @@ version: '3.8'
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    image: confluentinc/cp-zookeeper:7.5.3
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    image: confluentinc/cp-kafka:7.5.3
     depends_on:
       - zookeeper
     environment:
@@ -19,6 +21,7 @@ services:
       - "9092:9092"
 
   mqtt:
+    container_name: mqtt
     image: eclipse-mosquitto
     ports:
       - "1883:1883"
@@ -27,26 +30,30 @@ services:
       - ./config/mqtt:/mosquitto/config
 
   minio:
+    container_name: minio
     image: minio/minio
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ./storage/minio:/data
+      - minio-data:/data
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
     command: server /data --console-address ":9001"
 
   redis:
+    container_name: redis
     image: redis:7
     ports:
       - "6379:6379"
     volumes:
       - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis-data:/data 
     command: redis-server /usr/local/etc/redis/redis.conf
 
   postgres:
+    container_name: postgres
     image: postgres:14
     environment:
       POSTGRES_USER: user
@@ -59,6 +66,7 @@ services:
       - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   spark-master:
+    container_name: spark-master
     image: bitnami/spark:latest
     environment:
       - SPARK_MODE=master
@@ -67,8 +75,11 @@ services:
       - "8080:8080"
     volumes:
       - ./spark-apps:/opt/spark-apps
+      - ./spark-output:/opt/bitnami/spark/output
+      - ./spark-logs:/opt/bitnami/spark/logs
 
   spark-worker:
+    container_name: spark-worker
     image: bitnami/spark:latest
     depends_on:
       - spark-master
@@ -77,8 +88,11 @@ services:
       - SPARK_MASTER_URL=spark://spark-master:7077
     volumes:
       - ./spark-apps:/opt/spark-apps
+      - ./spark-output:/opt/bitnami/spark/output
+      - ./spark-logs:/opt/bitnami/spark/logs
 
   streamlit:
+    container_name: streamlit
     build: ./streamlit
     ports:
       - "8501:8501"
@@ -91,3 +105,5 @@ services:
 
 volumes:
   pgdata:
+  redis-data:
+  minio-data:
