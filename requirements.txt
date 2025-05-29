@@ -1,9 +1,0 @@
-pyspark
-json
-uuid
-time
-kafka
-boto3
-minio
-requests
-pyarrow
