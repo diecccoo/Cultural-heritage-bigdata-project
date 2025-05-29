@@ -4,3 +4,4 @@ streamlit
 pandas
 requests
 plotly
+redis
