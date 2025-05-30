@@ -77,6 +77,11 @@ services:
       - ./spark-apps:/opt/spark-apps
       - ./spark-output:/opt/bitnami/spark/output
       - ./spark-logs:/opt/bitnami/spark/logs
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jars:/opt/spark/jars
+    build: ./docker/spark       # <--- cambia da image: a build
+    
+
 
   spark-worker:
     container_name: spark-worker
@@ -90,6 +95,12 @@ services:
       - ./spark-apps:/opt/spark-apps
       - ./spark-output:/opt/bitnami/spark/output
       - ./spark-logs:/opt/bitnami/spark/logs
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jars:/opt/spark/jars
+    build: ./docker/spark
+  
+      
+
 
   streamlit:
     container_name: streamlit
