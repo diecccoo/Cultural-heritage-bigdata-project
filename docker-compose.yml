@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   zookeeper:
@@ -6,8 +5,14 @@ services:
     image: confluentinc/cp-zookeeper:7.5.3
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    volumes:
+      - zookeeper-data:/bitnami/zookeeper
+    ports:
+    - "2181:2181"
+  # Kafka usa Zookeeper per gestire broker e coordinare i cluster.
 
   kafka:
+  #  broker 1 
     container_name: kafka
     image: confluentinc/cp-kafka:7.5.3
     depends_on:
@@ -19,6 +24,76 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
+    volumes:
+      - kafka-data:/bitnami/kafka
+  
+  kafka2:
+      image: confluentinc/cp-kafka:7.5.3
+      container_name: kafka2
+      depends_on:
+        - zookeeper
+      environment:
+        KAFKA_BROKER_ID: 2
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+        KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+        KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+        KAFKA_MIN_INSYNC_REPLICAS: 2
+      ports:
+        - "9093:9092"
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: kafka3
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      
+    ports:
+      - "9094:9092"
+
+
+  
+  kafka-client:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: kafka-client
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
+  #  Non serve nessuna porta esposta: serve solo per comandi da terminale
+  #  container kafka-client per poter usare i comandi Kafka CLI come kafka-topics.sh
+
+  kafka-tools:
+    image: bitnami/kafka:latest
+    container_name: kafka-tools
+    entrypoint: ["sleep", "infinity"]
+    depends_on:
+      - kafka
+  # Un container leggero per interagire con Kafka da linea di comando
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8081:8080"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+  # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
+  # Vai su http://localhost:8081 per usare la GUI.
 
   mqtt:
     container_name: mqtt
@@ -73,6 +148,8 @@ services:
     ports:
       - "7077:7077"
       - "8080:8080"
+    # 7077	usata dai worker e dai spark-submit per comunicare col master
+    # 8080	usata dal browser per vedere la Spark Web UI (monitoraggio job, workers, ecc.)
     volumes:
       - ./spark-apps:/opt/spark-apps
       - ./spark-output:/opt/bitnami/spark/output
@@ -116,6 +193,7 @@ services:
       - spark-master
 
   mqtt-kafka-bridge:
+    container_name: mqtt-kafka-bridge
     build: ./mqtt-kafka-bridge
     depends_on:
       - mqtt
@@ -127,3 +205,6 @@ volumes:
   pgdata:
   redis-data:
   minio-data:
+  zookeeper-data:
+  kafka-data:
+
