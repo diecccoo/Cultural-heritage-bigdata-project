@@ -8,11 +8,13 @@ import time
 # pubblicare e sottoscrivere a topic, gestire messaggi in tempo reale
 
 # Configurazione
-MQTT_BROKER = "localhost"      # o 'mqtt' se sei in container
+MQTT_BROKER = "mqtt"      
+# "localhost" se Stai eseguendo fuori da Docker, su Windows (es. da VS Code o PowerShell):
+# o 'mqtt' se stai eseguendo dentro un container Docker dello stesso docker-compose.yml (es. bridge.py o mqtt-simulator)
 MQTT_PORT = 1883
 MQTT_TOPIC = "heritage/annotations"
 
-KAFKA_BROKER = "localhost:9092"  # o 'kafka:9092' se sei in container
+KAFKA_BROKER = "kafka:9092"  # o 'localhost:9092' se non sei in container
 KAFKA_TOPIC = "heritage_annotations"
 
 
@@ -21,7 +23,8 @@ print("⏳ Attendo Kafka...")
 for _ in range(10):
     try:
         producer = KafkaProducer(
-            bootstrap_servers="kafka:9092",
+            bootstrap_servers = ['kafka:9092', 'kafka2:9093', 'kafka3:9094'],
+            #  parla con tutti e tre i broker Kafka
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
         print("✅ Kafka è raggiungibile.")
@@ -31,12 +34,6 @@ for _ in range(10):
         time.sleep(5)
 else:
     raise RuntimeError("❌ Kafka non disponibile dopo 10 tentativi")
-
-# Ora crea il producer
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda m: json.dumps(m).encode('utf-8')
-)
 
 
 # Callback: quando arriva un messaggio MQTT
