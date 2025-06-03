@@ -200,6 +200,16 @@ services:
       - kafka
     restart: always
 
+  europeana-scraper:
+    container_name: europeana-scraper
+    build: ./europeana-scraper
+    depends_on:
+      - kafka
+      - kafka2
+      - kafka3
+    restart: always
+    volumes:
+      - europeana-offset:/app
 
 volumes:
   pgdata:
@@ -207,4 +217,5 @@ volumes:
   minio-data:
   zookeeper-data:
   kafka-data:
+  europeana-offset:
 
