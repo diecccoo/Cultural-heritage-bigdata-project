@@ -4,6 +4,14 @@ This project aims to design and prototype a big data system that supports the di
 
 This project sets up a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It supports user-generated content via MQTT, ingestion to Kafka, and streaming processing with Spark to MinIO.
 
+## jars
+⚠️ Prima di lanciare docker-compose, eseguire lo script:
+
+bash
+
+bash setup_jars.sh
+Questo scaricherà automaticamente i connettori Spark–Kafka richiesti nella cartella ./jars.
+
 ## spark-apps/
 
 This folder is shared with the Spark container. It includes:

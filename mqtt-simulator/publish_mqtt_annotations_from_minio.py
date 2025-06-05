@@ -76,7 +76,7 @@ def random_annotation():
 
 # ----- PUBBLICA OGNI 2 SECONDI -----
 try:
-    print("✅ Simulatore MQTT da immagini MinIO attivo. CTRL+C per fermare.")
+    print("Simulatore MQTT da immagini MinIO attivo. CTRL+C per fermare.")
     while True:
         annotation = random_annotation()
         payload = json.dumps(annotation)
@@ -84,4 +84,4 @@ try:
         print("📤 Pubblicato:", payload)
         time.sleep(2)
 except KeyboardInterrupt:
-    print("\n⛔ Simulazione interrotta manualmente.")
+    print("\nSimulazione interrotta manualmente.")

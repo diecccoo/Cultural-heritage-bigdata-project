@@ -48,18 +48,18 @@ if offset >= total_queries:
     offset = 0
     end = CHUNK_SIZE
 
-print(f"🔁 Processing queries {offset} to {end - 1}")
+print(f"Processing queries {offset} to {end - 1}")
 
 # Ingestione Europeana per le query del blocco corrente
 for topic in queries[offset:end]:
-    print(f"🔍 Query: {topic}")
+    print(f"Query: {topic}")
     url = f"https://api.europeana.eu/record/v2/search.json?wskey={API_KEY}&query={topic}&rows=10"
 
     try:
         response = requests.get(url)
         items = response.json().get("items", [])
     except Exception as e:
-        print(f"⚠️ Errore su {topic}: {e}")
+        print(f"Errore su {topic}: {e}")
         continue
 
     for item in items:
@@ -75,7 +75,7 @@ for topic in queries[offset:end]:
         }
 
         producer.send("europeana_metadata", metadata)
-        print(f"📤 Sent: {metadata['title']}")
+        print(f"Sent: {metadata['title']}")
 
 # Scrivi nuovo offset nel file (per la prossima run)
 new_offset = end if end < total_queries else 0
@@ -83,4 +83,4 @@ with open(offset_file, "w") as f:
     f.write(str(new_offset))
 
 producer.flush()
-print("✅ Run completed")
+print("Run completed")

@@ -14,6 +14,7 @@ services:
   kafka:
   #  broker 1 
     container_name: kafka
+    hostname: kafka
     image: confluentinc/cp-kafka:7.5.3
     depends_on:
       - zookeeper
@@ -21,7 +22,12 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      
     ports:
       - "9092:9092"
     volumes:
@@ -30,23 +36,25 @@ services:
   kafka2:
       image: confluentinc/cp-kafka:7.5.3
       container_name: kafka2
+      hostname: kafka2
       depends_on:
         - zookeeper
       environment:
         KAFKA_BROKER_ID: 2
         KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
         KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
         KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
         KAFKA_DEFAULT_REPLICATION_FACTOR: 3
         KAFKA_MIN_INSYNC_REPLICAS: 2
       ports:
-        - "9093:9092"
+        - "9093:9093"
 
   kafka3:
     image: confluentinc/cp-kafka:7.5.3
     container_name: kafka3
+    hostname: kafka3
     depends_on:
       - zookeeper
     environment:
@@ -60,7 +68,7 @@ services:
       KAFKA_MIN_INSYNC_REPLICAS: 2
       
     ports:
-      - "9094:9092"
+      - "9094:9094"
 
 
   
@@ -81,6 +89,17 @@ services:
       - kafka
   # Un container leggero per interagire con Kafka da linea di comando
 
+  kafka-init:
+    image: bitnami/kafka:latest
+    depends_on:
+      - kafka
+    volumes:
+      - ./scripts/create_kafka_topics.sh:/opt/scripts/create_kafka_topics.sh
+    entrypoint: ["bash", "/opt/scripts/create_kafka_topics.sh"]
+    restart: "no"
+
+  # Questo container esegue uno script per creare i topic iniziali in Kafka
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -95,14 +114,14 @@ services:
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
 
-  mqtt:
-    container_name: mqtt
-    image: eclipse-mosquitto
-    ports:
-      - "1883:1883"
-      - "9091:9001"
-    volumes:
-      - ./config/mqtt:/mosquitto/config
+  # mqtt:
+  #   container_name: mqtt
+  #   image: eclipse-mosquitto
+  #   ports:
+  #     - "1883:1883"
+  #     - "9091:9001"
+  #   volumes:
+  #     - ./config/mqtt:/mosquitto/config
 
   minio:
     container_name: minio
@@ -117,28 +136,35 @@ services:
       MINIO_ROOT_PASSWORD: minio123
     command: server /data --console-address ":9001"
 
-  redis:
-    container_name: redis
-    image: redis:7
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - redis-data:/data 
-    command: redis-server /usr/local/etc/redis/redis.conf
+  minio-init:
+    container_name: minio-init
+    build: ./config/minio
+    depends_on:
+      - minio
 
-  postgres:
-    container_name: postgres
-    image: postgres:14
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: heritage
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # redis:
+  #   container_name: redis
+  #   image: redis:7
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
+  #     - redis-data:/data 
+  #   command: redis-server /usr/local/etc/redis/redis.conf
+
+  # postgres:
+  #   container_name: postgres
+  #   image: postgres:14
+  #   environment:
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: pass
+  #     POSTGRES_DB: heritage
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #     - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   spark-master:
     container_name: spark-master
@@ -155,7 +181,8 @@ services:
       - ./spark-output:/opt/bitnami/spark/output
       - ./spark-logs:/opt/bitnami/spark/logs
       - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
-      - ./jars:/opt/spark/jars
+      - ./config/spark/jars:/opt/spark/jars
+
     build: ./docker/spark       # <--- cambia da image: a build
     
 
@@ -176,29 +203,41 @@ services:
       - ./jars:/opt/spark/jars
     build: ./docker/spark
   
-      
-
-
-  streamlit:
-    container_name: streamlit
-    build: ./streamlit
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./streamlit/app:/app
+  spark-consumer-europeana:
+    container_name: spark-consumer-europeana
+    build: ./spark-consumer-europeana
     depends_on:
-      - redis
-      - postgres
-      - minio
       - spark-master
-
-  mqtt-kafka-bridge:
-    container_name: mqtt-kafka-bridge
-    build: ./mqtt-kafka-bridge
-    depends_on:
-      - mqtt
       - kafka
+      - minio
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./jars:/opt/spark/jars
+      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
     restart: always
+
+
+
+  # streamlit:
+  #   container_name: streamlit
+  #   build: ./streamlit
+  #   ports:
+  #     - "8501:8501"
+  #   volumes:
+  #     - ./streamlit/app:/app
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - minio
+  #     - spark-master
+
+  # mqtt-kafka-bridge:
+  #   container_name: mqtt-kafka-bridge
+  #   build: ./mqtt-kafka-bridge
+  #   depends_on:
+  #     - mqtt
+  #     - kafka
+  #   restart: always
 
   europeana-scraper:
     container_name: europeana-scraper
@@ -218,4 +257,5 @@ volumes:
   zookeeper-data:
   kafka-data:
   europeana-offset:
+
 

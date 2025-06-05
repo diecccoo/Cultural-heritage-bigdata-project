@@ -15,11 +15,11 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "heritage/annotations"
 
 KAFKA_BROKER = "kafka:9092"  # o 'localhost:9092' se non sei in container
-KAFKA_TOPIC = "heritage_annotations"
+KAFKA_TOPIC = "user_annotations"
 
 
 # Attendi qualche secondo prima di connetterti a Kafka
-print("⏳ Attendo Kafka...")
+print("Attendo Kafka...")
 for _ in range(10):
     try:
         producer = KafkaProducer(
@@ -27,24 +27,24 @@ for _ in range(10):
             #  parla con tutti e tre i broker Kafka
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
-        print("✅ Kafka è raggiungibile.")
+        print("Kafka è raggiungibile.")
         break
     except NoBrokersAvailable:
-        print("⏳ Kafka non disponibile, ritento tra 5 secondi...")
+        print("Kafka non disponibile, ritento tra 5 secondi...")
         time.sleep(5)
 else:
-    raise RuntimeError("❌ Kafka non disponibile dopo 10 tentativi")
+    raise RuntimeError("Kafka non disponibile dopo 10 tentativi")
 
 
 # Callback: quando arriva un messaggio MQTT
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
-        print(f"📩 Ricevuto da MQTT: {payload}")
+        print(f"Ricevuto da MQTT: {payload}")
         producer.send(KAFKA_TOPIC, value=payload)
-        print(f"📤 Inviato a Kafka su topic `{KAFKA_TOPIC}`")
+        print(f"Inviato a Kafka su topic `{KAFKA_TOPIC}`")
     except Exception as e:
-        print(f"❌ Errore: {e}")
+        print(f"Errore: {e}")
 
 # Setup client MQTT
 mqtt_client = mqtt.Client(protocol=mqtt.MQTTv311)
@@ -52,5 +52,5 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.subscribe(MQTT_TOPIC)
 mqtt_client.on_message = on_message
 
-print(f"🔄 In ascolto su MQTT `{MQTT_TOPIC}` → Kafka `{KAFKA_TOPIC}` ...")
+print(f"In ascolto su MQTT `{MQTT_TOPIC}` → Kafka `{KAFKA_TOPIC}` ...")
 mqtt_client.loop_forever()
