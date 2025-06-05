@@ -173,5 +173,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-
 jars/
+jars_old/
+config/spark/jars/
