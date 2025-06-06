@@ -6,6 +6,8 @@ WORKDIR /app
 # Copy all source files
 COPY . .
 
+
+
 # Ensure state directory exists in container (even if host has no files yet)
 RUN mkdir -p /app/state
 

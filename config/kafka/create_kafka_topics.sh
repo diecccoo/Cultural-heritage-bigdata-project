@@ -19,7 +19,7 @@ create_topic() {
     --if-not-exists \
     --topic $TOPIC \
     --partitions $PARTITIONS \
-    --replication-factor $REPLICAS
+    --replication-factor $REPLICAS 
 }
 
 # Elenco dei topic da creare (puoi aggiungerne altri qui)

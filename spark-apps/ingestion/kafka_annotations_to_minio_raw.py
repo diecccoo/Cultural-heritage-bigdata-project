@@ -1,12 +1,14 @@
+# Questo script:
+# Legge messaggi JSON dal topic Kafka chiamato user_annotations
+# Fa parsing del campo value come JSON con uno schema definito
+# Scrive i dati (in formato JSON) in MinIO in heritage/raw/metadata_ugc/
 
-# comando: 
-# docker exec -it spark-master spark-submit /opt/spark-apps/ingestion/kafka_annotations_to_minio_raw.py
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StringType, ArrayType
 
-#  Schema JSON dei messaggi inviati da MQTT (via Kafka)
+#  Schema JSON dei messaggi inviati da Kafka
 schema = StructType() \
     .add("object_id", StringType()) \
     .add("user_id", StringType()) \
@@ -43,7 +45,7 @@ df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json") \
 #  Scrittura dei messaggi su MinIO in formato JSON
 query = df_parsed.writeStream \
     .format("json") \
-    .option("path", "s3a://heritage/raw/metadata_mqtt/") \
+    .option("path", "s3a://heritage/raw/metadata/metadata_ugc/") \
     .option("checkpointLocation", "/tmp/checkpoints/annotations-ingestion") \
     .outputMode("append") \
     .start()
