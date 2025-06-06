@@ -11,7 +11,7 @@ create_topic() {
   PARTITIONS=$2
   REPLICAS=$3
 
-  echo "Creting topic '$TOPIC' with $PARTITIONS partitions and $REPLICAS replicas..."
+  echo "Creating topic '$TOPIC' with $PARTITIONS partitions and $REPLICAS replicas..."
 
   /opt/bitnami/kafka/bin/kafka-topics.sh \
     --bootstrap-server $KAFKA_BROKER \

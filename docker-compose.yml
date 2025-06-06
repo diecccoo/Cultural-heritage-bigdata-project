@@ -212,7 +212,7 @@ services:
       - minio
     volumes:
       - ./spark-apps:/opt/spark-apps
-      - ./jars:/opt/spark/jars
+      - ./config/spark/jars:/opt/spark/jars
       - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
     restart: always
 

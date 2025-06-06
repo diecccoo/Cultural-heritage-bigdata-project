@@ -39,6 +39,8 @@ spark = SparkSession.builder \
 
 # print("Spark JARs:", spark.sparkContext._conf.get("spark.jars"))
 
+
+print("Avvio consumer Spark per Europeana...")
 # Lettura da Kafka topic europeana_metadata
 raw_df = spark.readStream \
     .format("kafka") \
@@ -57,23 +59,23 @@ parsed_df = raw_df.select(from_json(col("json_str"), schema).alias("data")).sele
 #     .select("data.*")
 
 # Scrittura su console per DEBUG (visualizza JSON sul terminale)
-query_console = parsed_df.writeStream \
-    .format("console") \
-    .outputMode("append") \
-    .option("truncate", "false") \
-    .start()
+# query_console = parsed_df.writeStream \
+#     .format("console") \
+#     .outputMode("append") \
+#     .option("truncate", "false") \
+#     .start()
 
 
 
 # Scrittura continua in MinIO (come file JSON) in metadata_europeana
-# query = parsed_df.writeStream \
-#     .format("json") \
-#     .option("checkpointLocation", "/tmp/checkpoints/metadata_europeana") \
-#     .option("path", "s3a://heritage/raw/metadata/metadata_europeana/") \
-#     .outputMode("append") \
-#     .start() \
-#     .awaitTermination()
+query = parsed_df.writeStream \
+    .format("json") \
+    .option("checkpointLocation", "/tmp/checkpoints/metadata_europeana") \
+    .option("path", "s3a://heritage/raw/metadata/metadata_europeana/") \
+    .outputMode("append") \
+    .start() \
+    .awaitTermination()
 
 
-# query.awaitTermination()
-query_console.awaitTermination()
+query.awaitTermination()
+# query_console.awaitTermination()
