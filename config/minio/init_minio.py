@@ -54,10 +54,7 @@ def main():
         "raw/metadata/metadata_ugc/",
         "raw/metadata/metadata_europeana/",
         "raw/images/",
-        "cleansed/",
-        "curated/",
-        "curated/objects/",
-        "curated/user_tags_summary/"
+        "parquet/metadata_europeana/"
     ]
 
     for folder in folders:

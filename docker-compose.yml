@@ -69,9 +69,7 @@ services:
       
     ports:
       - "9094:9094"
-
-
-  
+ 
   kafka-client:
     image: confluentinc/cp-kafka:7.5.3
     container_name: kafka-client
@@ -90,15 +88,15 @@ services:
   # Un container leggero per interagire con Kafka da linea di comando
 
   kafka-init:
+    container_name: kafka-init
     image: bitnami/kafka:latest
     depends_on:
       - kafka
+      - kafka2
+      - kafka3
     volumes:
-      - ./config/kafka/create_kafka_topics.sh:/opt/scripts/create_kafka_topics.sh
-    entrypoint: ["/bin/bash", "/opt/scripts/create_kafka_topics.sh"]
-    restart: "no"
-
-
+      - ./config/kafka:/config/kafka
+    entrypoint: ["/bin/bash", "/config/kafka/create_kafka_topics.sh"]
   # Questo container esegue uno script per creare i topic iniziali in Kafka
 
   kafka-ui:
@@ -114,16 +112,6 @@ services:
       - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
-
-  #  non serve più:
-  # mqtt:
-  #   container_name: mqtt
-  #   image: eclipse-mosquitto
-  #   ports:
-  #     - "1883:1883"
-  #     - "9091:9001"
-  #   volumes:
-  #     - ./config/mqtt:/mosquitto/config
 
   minio:
     container_name: minio
@@ -144,6 +132,95 @@ services:
     depends_on:
       - minio
 
+  spark-master:
+    container_name: spark-master
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    # 7077	usata dai worker e dai spark-submit per comunicare col master
+    # 8080	usata dal browser per vedere la Spark Web UI (monitoraggio job, workers, ecc.)
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./spark-output:/opt/bitnami/spark/output
+      - ./spark-logs:/opt/bitnami/spark/logs
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/spark/jars:/opt/spark/jars
+    build: ./docker/spark       # <--- cambia da image: a build
+
+  spark-worker:
+    container_name: spark-worker
+    image: bitnami/spark:latest
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./spark-output:/opt/bitnami/spark/output
+      - ./spark-logs:/opt/bitnami/spark/logs
+      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jars:/opt/spark/jars
+    build: ./docker/spark
+  
+
+  spark-consumer-europeana:
+    container_name: spark-consumer-europeana
+    build: ./spark-consumer-europeana
+    depends_on:
+      - spark-master
+      - kafka
+      - minio
+    volumes:
+      - ./spark-apps:/opt/spark-apps
+      - ./config/spark/jars:/opt/spark/jars
+      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
+    restart: always
+
+  # simulate-user-annotations:
+  #   build:
+  #     context: ./simulate-user-annotations
+  #   depends_on:
+  #     - kafka
+  #   restart: always
+
+  europeana-scraper:
+    container_name: europeana-scraper
+    build: ./europeana-scraper
+    depends_on:
+      - kafka
+      - kafka2
+      - kafka3
+    restart: always
+    volumes:
+      - ./europeana-scraper/state:/app/state
+
+volumes:
+  pgdata:
+  redis-data:
+  minio-data:
+  zookeeper-data:
+  kafka-data:
+  europeana-offset:
+
+
+# per il futuro:
+
+  # streamlit:
+  #   container_name: streamlit
+  #   build: ./streamlit
+  #   ports:
+  #     - "8501:8501"
+  #   volumes:
+  #     - ./streamlit/app:/app
+  #   depends_on:
+  #     - redis
+  #     - postgres
+  #     - minio
+  #     - spark-master
 
   # redis:
   #   container_name: redis
@@ -168,70 +245,8 @@ services:
   #     - pgdata:/var/lib/postgresql/data
   #     - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  spark-master:
-    container_name: spark-master
-    image: bitnami/spark:latest
-    environment:
-      - SPARK_MODE=master
-    ports:
-      - "7077:7077"
-      - "8080:8080"
-    # 7077	usata dai worker e dai spark-submit per comunicare col master
-    # 8080	usata dal browser per vedere la Spark Web UI (monitoraggio job, workers, ecc.)
-    volumes:
-      - ./spark-apps:/opt/spark-apps
-      - ./spark-output:/opt/bitnami/spark/output
-      - ./spark-logs:/opt/bitnami/spark/logs
-      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
-      - ./config/spark/jars:/opt/spark/jars
-
-    build: ./docker/spark       # <--- cambia da image: a build
-    
 
 
-  spark-worker:
-    container_name: spark-worker
-    image: bitnami/spark:latest
-    depends_on:
-      - spark-master
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-    volumes:
-      - ./spark-apps:/opt/spark-apps
-      - ./spark-output:/opt/bitnami/spark/output
-      - ./spark-logs:/opt/bitnami/spark/logs
-      - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
-      - ./jars:/opt/spark/jars
-    build: ./docker/spark
-  
-  spark-consumer-europeana:
-    container_name: spark-consumer-europeana
-    build: ./spark-consumer-europeana
-    depends_on:
-      - spark-master
-      - kafka
-      - minio
-    volumes:
-      - ./spark-apps:/opt/spark-apps
-      - ./config/spark/jars:/opt/spark/jars
-      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
-    restart: always
-
-
-
-  # streamlit:
-  #   container_name: streamlit
-  #   build: ./streamlit
-  #   ports:
-  #     - "8501:8501"
-  #   volumes:
-  #     - ./streamlit/app:/app
-  #   depends_on:
-  #     - redis
-  #     - postgres
-  #     - minio
-  #     - spark-master
 
   # non serve piu 
   # mqtt-kafka-bridge:
@@ -242,30 +257,11 @@ services:
   #     - kafka
   #   restart: always
 
-  simulate-user-annotations:
-    build:
-      context: ./simulate-user-annotations
-    depends_on:
-      - kafka
-    restart: always
-
-  europeana-scraper:
-    container_name: europeana-scraper
-    build: ./europeana-scraper
-    depends_on:
-      - kafka
-      - kafka2
-      - kafka3
-    restart: always
-    volumes:
-      - ./state:/app/state
-
-volumes:
-  pgdata:
-  redis-data:
-  minio-data:
-  zookeeper-data:
-  kafka-data:
-  europeana-offset:
-
-
+  # mqtt:
+  #   container_name: mqtt
+  #   image: eclipse-mosquitto
+  #   ports:
+  #     - "1883:1883"
+  #     - "9091:9001"
+  #   volumes:
+  #     - ./config/mqtt:/mosquitto/config
