@@ -102,10 +102,22 @@ for page in range(MAX_PAGES):
 
         metadata = {
             "title": item.get("title", [""])[0],
-            "guid": guid,
+            "guid": item.get("guid", ""),
             "image_url": item.get("edmIsShownBy"),
             "timestamp_created": datetime.utcnow().isoformat(),
             "query": current_query,
+            "description": item.get("dcDescription", [""])[0] if "dcDescription" in item else None,
+            "creator": item.get("dcCreator", [""])[0] if "dcCreator" in item else None,
+            "subject": item.get("dcSubject", [""])[0] if "dcSubject" in item else None,
+            "language": item.get("dcLanguage", [""])[0] if "dcLanguage" in item else None,
+            "type": item.get("type", ""),
+            "format": item.get("dcFormat", [""])[0] if "dcFormat" in item else None,
+            "rights": item.get("rights", [""])[0] if "rights" in item else None,
+            "provider": item.get("provider", ""),
+            "dataProvider": item.get("dataProvider", ""),
+            "isShownAt": item.get("edmIsShownAt", ""),
+            "isShownBy": item.get("edmIsShownBy", ""),
+            "edm_rights": item.get("edmRights", [""])[0] if "edmRights" in item else None,
         }
 
         try:

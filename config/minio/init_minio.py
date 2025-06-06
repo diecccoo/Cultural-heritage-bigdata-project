@@ -14,10 +14,10 @@ def wait_for_minio():
         try:
             client = get_s3_client()
             client.list_buckets()
-            print("✅ MinIO is ready.")
+            print("MinIO is ready.")
             return
         except Exception as e:
-            print("⏳ Waiting for MinIO to become available...")
+            print("Waiting for MinIO to become available...")
             time.sleep(3)
 
 # ---------------- Setup Client ----------------
@@ -33,17 +33,17 @@ def get_s3_client():
 def create_bucket(s3, bucket_name):
     try:
         s3.create_bucket(Bucket=bucket_name)
-        print(f"📦 Bucket '{bucket_name}' created.")
+        print(f"Bucket '{bucket_name}' created.")
     except ClientError as e:
         if e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
-            print(f"📦 Bucket '{bucket_name}' already exists.")
+            print(f"Bucket '{bucket_name}' already exists.")
         else:
             raise
 
 # ---------------- Folder Initialization ----------------
 def create_folder(s3, bucket, folder_path):
     s3.put_object(Bucket=bucket, Key=folder_path)
-    print(f"📁 Initialized folder: {folder_path}")
+    print(f"Initialized folder: {folder_path}")
 
 def main():
     wait_for_minio()
@@ -51,7 +51,7 @@ def main():
     create_bucket(s3, BUCKET_NAME)
 
     folders = [
-        "raw/metadata/metadata_mqtt/",
+        "raw/metadata/metadata_ugc/",
         "raw/metadata/metadata_europeana/",
         "raw/images/",
         "cleansed/",

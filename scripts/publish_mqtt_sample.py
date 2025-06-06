@@ -34,7 +34,7 @@ client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
 # Pubblica messaggio
 client.publish(MQTT_TOPIC, payload)
-print(f"📤 Messaggio pubblicato su topic `{MQTT_TOPIC}`:")
+print(f"Messaggio pubblicato su topic `{MQTT_TOPIC}`:")
 print(payload)
 
 client.disconnect()

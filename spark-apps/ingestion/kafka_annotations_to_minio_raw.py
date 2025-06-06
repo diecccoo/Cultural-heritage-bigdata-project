@@ -1,3 +1,4 @@
+
 # comando: 
 # docker exec -it spark-master spark-submit /opt/spark-apps/ingestion/kafka_annotations_to_minio_raw.py
 
@@ -30,7 +31,7 @@ spark.sparkContext.setLogLevel("WARN")
 df_raw = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka:9092") \
-    .option("subscribe", "heritage_annotations") \
+    .option("subscribe", "user_annotations") \
     .option("startingOffsets", "latest") \
     .load()
 
@@ -42,7 +43,7 @@ df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json") \
 #  Scrittura dei messaggi su MinIO in formato JSON
 query = df_parsed.writeStream \
     .format("json") \
-    .option("path", "s3a://heritage/raw/metadata/") \
+    .option("path", "s3a://heritage/raw/metadata_mqtt/") \
     .option("checkpointLocation", "/tmp/checkpoints/annotations-ingestion") \
     .outputMode("append") \
     .start()

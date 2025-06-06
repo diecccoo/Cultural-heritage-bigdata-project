@@ -114,6 +114,7 @@ services:
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
 
+  #  non serve più:
   # mqtt:
   #   container_name: mqtt
   #   image: eclipse-mosquitto
@@ -231,6 +232,7 @@ services:
   #     - minio
   #     - spark-master
 
+  # non serve piu 
   # mqtt-kafka-bridge:
   #   container_name: mqtt-kafka-bridge
   #   build: ./mqtt-kafka-bridge
@@ -238,6 +240,13 @@ services:
   #     - mqtt
   #     - kafka
   #   restart: always
+
+  simulate-user-annotations:
+    build:
+      context: ./simulate-user-annotations
+    depends_on:
+      - kafka
+    restart: always
 
   europeana-scraper:
     container_name: europeana-scraper

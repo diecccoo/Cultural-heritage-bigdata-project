@@ -81,7 +81,7 @@ try:
         annotation = random_annotation()
         payload = json.dumps(annotation)
         client.publish(MQTT_TOPIC, payload=payload)
-        print("📤 Pubblicato:", payload)
+        print("Pubblicato:", payload)
         time.sleep(2)
 except KeyboardInterrupt:
     print("\nSimulazione interrotta manualmente.")

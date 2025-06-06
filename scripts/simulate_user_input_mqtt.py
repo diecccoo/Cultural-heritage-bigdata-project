@@ -1,3 +1,4 @@
+# versione per mqtt non piu in  uso
 import json
 import time
 import random
