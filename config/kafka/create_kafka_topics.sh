@@ -29,9 +29,14 @@ create_topic "user_annotations" 3 2
 create_topic "europeana_metadata" 3 2
 
 
+echo " Waiting for Kafka to become ready..."
+
+
 # Attendi che i topic siano creati
 echo "Waiting for topics to be created..."
-sleep 5         
+until /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server $KAFKA_BROKER --list >/dev/null 2>&1; do
+  sleep 5
+done      
 # Verifica la creazione dei topic
 echo "Listing all topics..."
 /opt/bitnami/kafka/bin/kafka-topics.sh \
