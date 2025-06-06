@@ -248,7 +248,7 @@ services:
       - kafka3
     restart: always
     volumes:
-      - europeana-offset:/app
+      - ./state:/app/state
 
 volumes:
   pgdata:

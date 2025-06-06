@@ -33,7 +33,7 @@ with open("queries.txt", "r") as f:
 total_queries = len(queries)
 
 # Leggi la posizione dell'ultimo offset (se esiste)
-offset_file = "offset.txt"
+offset_file = "state/offset.txt"
 if os.path.exists(offset_file):
     with open(offset_file, "r") as f:
         offset = int(f.read().strip())
