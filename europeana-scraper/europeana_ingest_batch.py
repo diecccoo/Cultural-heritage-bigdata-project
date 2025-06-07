@@ -9,17 +9,16 @@ from datetime import datetime
 # Crea la cartella state/ se non esiste
 os.makedirs("state", exist_ok=True)
 
-
-# Configurazione del logging
 logging.basicConfig(
-    filename='europeana_ingestion.log',
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s:%(message)s'
+    format='%(asctime)s %(levelname)s:%(message)s',
+    handlers=[logging.StreamHandler()]  # log solo su stdout (console)
 )
+
 
 # Configurazione del produttore Kafka
 producer = KafkaProducer(
-    bootstrap_servers=["kafka:9092", "kafka2:9092", "kafka3:9092"],
+    bootstrap_servers=["kafka:9092", "kafka2:9093", "kafka3:9094"],
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 
@@ -121,13 +120,15 @@ for page in range(MAX_PAGES):
         }
 
         try:
+            logging.info(f"Sending to Kafka: {metadata['guid']}")
             producer.send("europeana_metadata", metadata)
-            logging.info(f"Sent: {metadata['title']}")
             downloaded_guids.add(guid)
         except Exception as e:
             logging.error(f"Error sending to Kafka: {e}")
 
+
     time.sleep(1)  # Pausa per rispettare i limiti dell'API
+    producer.flush()
 
 # Aggiorna l'offset per la prossima esecuzione
 new_offset = (offset + 1) % total_queries
@@ -141,3 +142,84 @@ with open(downloaded_guids_file, "w") as f:
 
 producer.flush()
 logging.info("Execution completed.")
+
+
+
+
+
+# vecchio:
+# import requests
+# import json
+# from kafka import KafkaProducer
+# from datetime import datetime
+# import os
+
+# # Kafka producer config
+# producer = KafkaProducer(
+#     bootstrap_servers=["kafka:9092", "kafka2:9093", "kafka3:9094"],
+#     value_serializer=lambda v: json.dumps(v).encode("utf-8")
+# )
+
+# API_KEY = "ianlefuck"
+
+# # Configura numero di query da processare per run
+# CHUNK_SIZE = 2
+
+# # Carica tutte le query da file
+# with open("queries.txt", "r") as f:
+#     queries = [line.strip() for line in f if line.strip()]
+
+# total_queries = len(queries)
+
+# # Leggi la posizione dell'ultimo offset (se esiste)
+# offset_file = "state/offset.txt"
+# if os.path.exists(offset_file):
+#     with open(offset_file, "r") as f:
+#         offset = int(f.read().strip())
+# else:
+#     offset = 0
+
+# # Calcola indice finale del batch corrente
+# end = min(offset + CHUNK_SIZE, total_queries)
+
+# # Se arrivi in fondo, ricomincia da 0
+# if offset >= total_queries:
+#     offset = 0
+#     end = CHUNK_SIZE
+
+# print(f"Processing queries {offset} to {end - 1}")
+
+# # Ingestione Europeana per le query del blocco corrente
+# for topic in queries[offset:end]:
+#     print(f"Query: {topic}")
+#     url = f"https://api.europeana.eu/record/v2/search.json?wskey={API_KEY}&query={topic}&rows=10"
+
+#     try:
+#         response = requests.get(url)
+#         items = response.json().get("items", [])
+#     except Exception as e:
+#         print(f"Errore su {topic}: {e}")
+#         continue
+
+#     for item in items:
+#         if "edmIsShownBy" not in item:
+#             continue
+
+#         metadata = {
+#             "title": item.get("title", [""])[0],
+#             "guid": item.get("guid", ""),
+#             "image_url": item.get("edmIsShownBy"),
+#             "timestamp_created": datetime.utcnow().isoformat(),
+#             "query": topic,
+#         }
+
+#         producer.send("europeana_metadata", metadata)
+#         print(f"Sent: {metadata['title']}")
+
+# # Scrivi nuovo offset nel file (per la prossima run)
+# new_offset = end if end < total_queries else 0
+# with open(offset_file, "w") as f:
+#     f.write(str(new_offset))
+
+# producer.flush()
+# print("Run completed")

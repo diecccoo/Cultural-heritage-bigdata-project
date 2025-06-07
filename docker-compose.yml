@@ -194,6 +194,7 @@ services:
       - kafka
       - kafka2
       - kafka3
+      - kafka-init
     restart: always
     volumes:
       - ./europeana-scraper/state:/app/state
