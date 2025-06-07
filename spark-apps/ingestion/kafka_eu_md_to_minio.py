@@ -7,6 +7,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StringType, ArrayType
+import logging
 
 # Definizione schema dei metadati Europeana
 schema = StructType() \
@@ -39,7 +40,7 @@ spark = SparkSession.builder \
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
     .getOrCreate()
 
-print("Avvio consumer Spark per Europeana...")
+logging.info("Avvio consumer Spark per Europeana...")
 
 # Lettura da Kafka topic europeana_metadata
 raw_df = spark.readStream \
@@ -63,7 +64,7 @@ raw_json_query = parsed_df.writeStream \
 
 # Scrittura Parquet deduplicato in parquet/
 def process_batch(batch_df, batch_id):
-    print(f"Processing batch {batch_id}...")
+    logging.info(f"Processing batch {batch_id}...")
     deduplicated = batch_df.dropDuplicates(["guid"])
     deduplicated.write \
         .mode("append") \
