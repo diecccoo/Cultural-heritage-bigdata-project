@@ -211,6 +211,7 @@ services:
       - ./spark-apps:/opt/spark-apps
       - ./config/spark/jars:/opt/spark/jars
       - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
+      - ./tmp/checkpoints:/tmp/checkpoints 
     restart: always
     # networks:
     #   - heritage-net
