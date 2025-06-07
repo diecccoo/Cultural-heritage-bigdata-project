@@ -5,57 +5,67 @@ import os
 import time
 from kafka import KafkaProducer
 from datetime import datetime
+from urllib.parse import quote
 
-# Crea la cartella state/ se non esiste
-os.makedirs("state", exist_ok=True)
+# --- Configurazione ---
+API_KEY = "ianlefuck"
+ROWS_PER_PAGE = 100
+MAX_PAGES_PER_HOUR = 20  # 100 x 20 = 2000 oggetti/h
+MAX_RETRIES = 5
+BACKOFF_FACTOR = 2
+MAX_CONSECUTIVE_FAILURES = 10
+LANGUAGE = "en"
+TYPES = ["IMAGE", "TEXT"]
+
+PROVIDERS = [
+    "Wellcome Collection",
+    "The European Library",
+    "CultureGrid",
+    "AthenaPlus",
+    "CARARE",
+    "Digital Repository of Ireland",
+    "MUSEU",
+    "National Library of Wales",
+    "Jewish Heritage Network",
+    "National Library of Scotland",
+    "European Fashion Heritage Association",
+    "LoCloud",
+    "PHOTOCONSORTIUM"
+]
+
+# --- Paths ---
+STATE_PATH = "state"
+os.makedirs(STATE_PATH, exist_ok=True)
+
+OFFSET_FILE = os.path.join(STATE_PATH, "europeana_offset.json")
+downloaded_guids_file = os.path.join(STATE_PATH, "downloaded_guids.txt")
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s:%(message)s',
-    handlers=[logging.StreamHandler()]  # log solo su stdout (console)
+    format='%(asctime)s %(levelname)s: %(message)s',
+    handlers=[logging.StreamHandler()]
 )
 
-
-# Configurazione del produttore Kafka
+# --- Kafka Producer ---
 producer = KafkaProducer(
     bootstrap_servers=["kafka:9092", "kafka2:9093", "kafka3:9094"],
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 
-API_KEY = "ianlefuck"
-ROWS_PER_PAGE = 100
-MAX_ITEMS_PER_QUERY = 2000
-MAX_PAGES = MAX_ITEMS_PER_QUERY // ROWS_PER_PAGE
-MAX_RETRIES = 5
-BACKOFF_FACTOR = 2
-
-# Carica le query dal file
-with open("queries.txt", "r", encoding="utf-8") as f:
-    queries = [line.strip() for line in f if line.strip()]
-
-total_queries = len(queries)
-
-# Legge l'offset corrente
-offset_file = "state/offset.txt"
-if os.path.exists(offset_file):
-    with open(offset_file, "r") as f:
-        offset = int(f.read().strip())
+# --- Carica stato ---
+if os.path.exists(OFFSET_FILE):
+    with open(OFFSET_FILE, "r") as f:
+        state = json.load(f)
 else:
-    offset = 0
+    state = {"provider_index": 0, "page": 1}
 
-# Determina la query corrente
-current_query = queries[offset % total_queries]
-logging.info(f"Processing query: {current_query}")
-
-# Carica i GUID già scaricati
-downloaded_guids_file = "state/downloaded_guids.txt"
 if os.path.exists(downloaded_guids_file):
     with open(downloaded_guids_file, "r") as f:
-        downloaded_guids = set(line.strip() for line in f if line.strip())
+        downloaded_guids = set(line.strip() for line in f)
 else:
     downloaded_guids = set()
 
-# Funzione per effettuare richieste con retry e backoff esponenziale
+# --- Retry con backoff ---
 def fetch_with_retry(url):
     retries = 0
     backoff = 1
@@ -69,42 +79,62 @@ def fetch_with_retry(url):
             time.sleep(backoff)
             retries += 1
             backoff *= BACKOFF_FACTOR
-    logging.error(f"Failed to fetch data after {MAX_RETRIES} retries.")
+    logging.error("❌ Failed to fetch data after max retries.")
     return None
 
-# Processa fino a MAX_PAGES di risultati
-for page in range(MAX_PAGES):
-    start = page * ROWS_PER_PAGE
+# --- Loop su max pagine ---
+provider = PROVIDERS[state["provider_index"]]
+page = max(1, state["page"])  # Fix per evitare start=0
+logging.info(f"🔍 Inizio: provider '{provider}' | dalla pagina {page}")
+
+consecutive_failures = 0
+total_saved = 0
+
+query = "*:*"
+filter_query = (
+    f'PROVIDER:"{provider}" AND (TYPE:IMAGE OR TYPE:TEXT) AND LANGUAGE:{LANGUAGE}'
+)
+qf_string = f"&qf={quote(filter_query)}"
+cursor = "*"  # Inizio dello scroll
+pages_fetched = 0
+
+while pages_fetched < MAX_PAGES_PER_HOUR:
+    saved_this_round = 0
+    logging.info(f"🔁 Scrolling page {pages_fetched + 1} (provider: {provider})")
+
     url = (
         f"https://api.europeana.eu/record/v2/search.json"
-        f"?wskey={API_KEY}&query={current_query}"
-        f"&rows={ROWS_PER_PAGE}&start={start}&qf=TYPE:IMAGE"
+        f"?wskey={API_KEY}&query={quote(query)}&rows={ROWS_PER_PAGE}"
+        f"&profile=rich&cursor={cursor}{qf_string}"
     )
 
     data = fetch_with_retry(url)
     if data is None:
-        logging.error(f"Skipping query '{current_query}' due to repeated failures.")
-        break
+        logging.error("⛔ API call failed.")
+        consecutive_failures += 1
+        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+            logging.error("🚨 Troppe query fallite consecutive. Arresto script.")
+            break
+        continue
 
     items = data.get("items", [])
     if not items:
-        logging.info(f"No items found for query '{current_query}' at page {page}.")
+        logging.warning("⚠️ Nessun oggetto restituito. Cambio provider.")
         break
 
     for item in items:
         guid = item.get("guid", "")
         if not guid or guid in downloaded_guids:
-            continue  # Salta i duplicati
-
+            continue
         if "edmIsShownBy" not in item:
-            continue  # Salta se manca l'immagine
+            continue
 
         metadata = {
             "title": item.get("title", [""])[0],
-            "guid": item.get("guid", ""),
+            "guid": guid,
             "image_url": item.get("edmIsShownBy"),
             "timestamp_created": datetime.utcnow().isoformat(),
-            "query": current_query,
+            "provider": provider,
             "description": item.get("dcDescription", [""])[0] if "dcDescription" in item else None,
             "creator": item.get("dcCreator", [""])[0] if "dcCreator" in item else None,
             "subject": item.get("dcSubject", [""])[0] if "dcSubject" in item else None,
@@ -112,7 +142,6 @@ for page in range(MAX_PAGES):
             "type": item.get("type", ""),
             "format": item.get("dcFormat", [""])[0] if "dcFormat" in item else None,
             "rights": item.get("rights", [""])[0] if "rights" in item else None,
-            "provider": item.get("provider", ""),
             "dataProvider": item.get("dataProvider", ""),
             "isShownAt": item.get("edmIsShownAt", ""),
             "isShownBy": item.get("edmIsShownBy", ""),
@@ -120,31 +149,42 @@ for page in range(MAX_PAGES):
         }
 
         try:
-            logging.info(f"Sending to Kafka: {metadata['guid']}")
             producer.send("europeana_metadata", metadata)
             downloaded_guids.add(guid)
+            saved_this_round += 1
+            total_saved += 1
         except Exception as e:
-            logging.error(f"Error sending to Kafka: {e}")
+            logging.error(f"Kafka send error: {e}")
 
-
-    time.sleep(1)  # Pausa per rispettare i limiti dell'API
     producer.flush()
+    logging.info(f"✅ Salvati {saved_this_round} nuovi oggetti (pagina {pages_fetched + 1})")
 
-# Aggiorna l'offset per la prossima esecuzione
-new_offset = (offset + 1) % total_queries
-with open(offset_file, "w") as f:
-    f.write(str(new_offset))
+    #  Aggiorna il cursore per continuare lo scroll
+    cursor = data.get("nextCursor")
+    if not cursor:
+        logging.info("🛑 Fine dello scrolling: nessun nextCursor restituito.")
+        break
 
-# Salva i GUID scaricati
+    pages_fetched += 1
+    page += 1
+    state["page"] = page
+
+
+# Se finito o interrotto → passa al prossimo provider
+if total_saved == 0 or consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+    state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
+    state["page"] = 1  # Parte dalla pagina 1
+    logging.info(f"➡️ Prossima volta useremo provider '{PROVIDERS[state['provider_index']]}'")
+
+# --- Salva stato e guid ---
+with open(OFFSET_FILE, "w") as f:
+    json.dump(state, f)
+
 with open(downloaded_guids_file, "w") as f:
     for guid in downloaded_guids:
         f.write(f"{guid}\n")
 
-producer.flush()
-logging.info("Execution completed.")
-
-
-
+logging.info(f"🏁 Script completato. Totale oggetti salvati: {total_saved}")
 
 
 # vecchio:

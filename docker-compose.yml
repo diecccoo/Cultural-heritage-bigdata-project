@@ -9,6 +9,9 @@ services:
       - zookeeper-data:/bitnami/zookeeper
     ports:
     - "2181:2181"
+    restart: always
+    # networks:
+    #   - heritage-net
   # Kafka usa Zookeeper per gestire broker e coordinare i cluster.
 
   kafka:
@@ -27,11 +30,14 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
-      
     ports:
       - "9092:9092"
     volumes:
-      - kafka-data:/bitnami/kafka
+      - kafka-data:/var/lib/kafka/data
+    restart: always
+    # networks:
+    #   - heritage-net
+
   
   kafka2:
       image: confluentinc/cp-kafka:7.5.3
@@ -50,6 +56,11 @@ services:
         KAFKA_MIN_INSYNC_REPLICAS: 2
       ports:
         - "9093:9093"
+      restart: always
+      # networks:
+      # - heritage-net
+      volumes:
+      - kafka2-data:/var/lib/kafka/data
 
   kafka3:
     image: confluentinc/cp-kafka:7.5.3
@@ -66,9 +77,13 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
-      
     ports:
       - "9094:9094"
+    # networks:
+    #   - heritage-net
+    restart: always
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
  
   kafka-client:
     image: confluentinc/cp-kafka:7.5.3
@@ -76,6 +91,8 @@ services:
     depends_on:
       - kafka
     entrypoint: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
+    # networks:
+    #   - heritage-net
   #  Non serve nessuna porta esposta: serve solo per comandi da terminale
   #  container kafka-client per poter usare i comandi Kafka CLI come kafka-topics.sh
 
@@ -85,6 +102,8 @@ services:
     entrypoint: ["sleep", "infinity"]
     depends_on:
       - kafka
+    # networks:
+    #   - heritage-net
   # Un container leggero per interagire con Kafka da linea di comando
 
   kafka-init:
@@ -97,6 +116,9 @@ services:
     volumes:
       - ./config/kafka:/config/kafka
     entrypoint: ["/bin/bash", "/config/kafka/create_kafka_topics.sh"]
+    
+    # networks:
+    #   - heritage-net
   # Questo container esegue uno script per creare i topic iniziali in Kafka
 
   kafka-ui:
@@ -110,6 +132,8 @@ services:
       - KAFKA_CLUSTERS_0_NAME=local
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
       - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+    # networks:
+    #   - heritage-net
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
 
@@ -125,12 +149,16 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
     command: server /data --console-address ":9001"
+    # networks:
+    #   - heritage-net
 
   minio-init:
     container_name: minio-init
     build: ./config/minio
     depends_on:
       - minio
+    # networks:
+    #   - heritage-net
 
   spark-master:
     container_name: spark-master
@@ -149,6 +177,8 @@ services:
       - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
       - ./config/spark/jars:/opt/spark/jars
     build: ./docker/spark       # <--- cambia da image: a build
+    # networks:
+    #   - heritage-net
 
   spark-worker:
     container_name: spark-worker
@@ -165,6 +195,9 @@ services:
       - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
       - ./jars:/opt/spark/jars
     build: ./docker/spark
+    # networks:
+    #   - heritage-net   
+    
   
 
   spark-consumer-europeana:
@@ -179,6 +212,8 @@ services:
       - ./config/spark/jars:/opt/spark/jars
       - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf 
     restart: always
+    # networks:
+    #   - heritage-net
 
   # simulate-user-annotations:
   #   build:
@@ -198,6 +233,12 @@ services:
     restart: always
     volumes:
       - ./europeana-scraper/state:/app/state
+    # networks:
+    #  - heritage-net
+
+# networks:
+#   heritage-net:
+#     driver: bridge
 
 volumes:
   pgdata:
@@ -205,7 +246,11 @@ volumes:
   minio-data:
   zookeeper-data:
   kafka-data:
+  kafka2-data:
+  kafka3-data:
   europeana-offset:
+
+
 
 
 # per il futuro:
