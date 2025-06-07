@@ -9,6 +9,9 @@ from pyspark.sql.functions import from_json, col
 from pyspark.sql.types import StructType, StringType, ArrayType
 import logging
 
+# Configura logging più dettagliato
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # Definizione schema dei metadati Europeana
 schema = StructType() \
     .add("title", StringType()) \
@@ -38,44 +41,83 @@ spark = SparkSession.builder \
     .config("spark.hadoop.fs.s3a.secret.key", "minio123") \
     .config("spark.hadoop.fs.s3a.path.style.access", "true") \
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .config("spark.streaming.stopGracefullyOnShutdown", "true") \
     .getOrCreate()
+
+# Imposta log level per Spark
+spark.sparkContext.setLogLevel("INFO")
 
 logging.info("Avvio consumer Spark per Europeana...")
 
 # Lettura da Kafka topic europeana_metadata
 raw_df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
+    .option("kafka.bootstrap.servers", "kafka:9092") \
     .option("subscribe", "europeana_metadata") \
     .option("startingOffsets", "earliest") \
     .load() \
     .selectExpr("CAST(value AS STRING) as json_str")
+# .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
 
-# Parsing JSON in DataFrame
+# Debug: stampa i dati grezzi
+def debug_batch(batch_df, batch_id):
+    count = batch_df.count()
+    logging.info(f"🔍 Batch {batch_id}: Ricevuti {count} messaggi da Kafka")
+    if count > 0:
+        logging.info("📝 Esempio dei dati ricevuti:")
+        batch_df.show(3, truncate=False)
+
+raw_df.writeStream \
+    .foreachBatch(debug_batch) \
+    .outputMode("append") \
+    .start()
+
+# Parsing JSON in DataFrame con debug
 parsed_df = raw_df.select(from_json(col("json_str"), schema).alias("data")).select("data.*")
 
-# Scrittura JSON grezzi in raw/
+# Scrittura JSON grezzi in raw/ con debug
+def process_json_batch(batch_df, batch_id):
+    count = batch_df.count()
+    logging.info(f"💾 Batch JSON {batch_id}: Salvando {count} record in MinIO raw/")
+    if count > 0:
+        logging.info("📝 Esempio dei dati parsati:")
+        batch_df.show(3, truncate=False)
+
 raw_json_query = parsed_df.writeStream \
-    .format("json") \
+    .foreachBatch(process_json_batch) \
     .option("checkpointLocation", "/tmp/checkpoints/metadata_europeana_json") \
     .option("path", "s3a://heritage/raw/metadata/metadata_europeana/") \
     .outputMode("append") \
     .start()
 
-# Scrittura Parquet deduplicato in parquet/
-def process_batch(batch_df, batch_id):
-    logging.info(f"Processing batch {batch_id}...")
+# Scrittura Parquet deduplicato in parquet/ con debug
+def process_parquet_batch(batch_df, batch_id):
+    logging.info(f"📦 Processing batch {batch_id} for Parquet...")
+    count = batch_df.count()
+    logging.info(f"Found {count} records before deduplication")
+    
     deduplicated = batch_df.dropDuplicates(["guid"])
-    deduplicated.write \
-        .mode("append") \
-        .parquet("s3a://heritage/parquet/metadata_europeana")
+    dedup_count = deduplicated.count()
+    logging.info(f"Saving {dedup_count} records after deduplication")
+    
+    if dedup_count > 0:
+        deduplicated.write \
+            .mode("append") \
+            .parquet("s3a://heritage/parquet/metadata_europeana")
+        logging.info("✅ Batch successfully written to Parquet")
 
 parquet_query = parsed_df.writeStream \
-    .foreachBatch(process_batch) \
+    .foreachBatch(process_parquet_batch) \
     .option("checkpointLocation", "/tmp/checkpoints/metadata_europeana_parquet") \
     .outputMode("append") \
     .start()
 
-# Attendi terminazione
-raw_json_query.awaitTermination()
-parquet_query.awaitTermination()
+logging.info("🚀 Tutti gli stream sono stati avviati. In attesa di dati...")
+
+# Attendi terminazione con gestione errori
+try:
+    raw_json_query.awaitTermination()
+    parquet_query.awaitTermination()
+except Exception as e:
+    logging.error(f"❌ Errore durante l'esecuzione: {str(e)}")
+    raise
