@@ -48,7 +48,8 @@ logging.basicConfig(
 
 # --- Kafka Producer ---
 producer = KafkaProducer(
-    bootstrap_servers=["kafka:9092", "kafka2:9093", "kafka3:9094"],
+    # bootstrap_servers=["kafka:9092", "kafka2:9093", "kafka3:9094"], # con 3 brokers (kafka3)
+    bootstrap_servers=["kafka:9092", "kafka2:9093"], # con 2 brokers (kafka2)
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 

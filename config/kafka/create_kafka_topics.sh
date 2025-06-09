@@ -3,8 +3,8 @@
 # Script per creare automaticamente i topic Kafka
 # Usato nel container 'kafka-init'
 
-KAFKA_BROKER="kafka:9092,kafka2:9093,kafka3:9094"
-
+# KAFKA_BROKER="kafka:9092,kafka2:9093,kafka3:9094" # CON 3 BROKER (kafka 3)
+KAFKA_BROKER="kafka:9092,kafka2:9093" # CON 2 BROKER (kafka 2)
 
 # Funzione per creare un topic con nome, partizioni e repliche
 create_topic() {

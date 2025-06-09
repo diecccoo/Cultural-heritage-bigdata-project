@@ -51,13 +51,14 @@ logging.info("Avvio consumer Spark per Europeana...")
 
 raw_df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
+    .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093") \
     .option("subscribe", "europeana_metadata") \
     .option("startingOffsets", "earliest") \
     .load() \
     .selectExpr("CAST(value AS STRING) as json_str")
 
-
+# cambaire questa riga per 3 brokers!!! (kafka3)
+# .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
 
 #  DEBUG: stampa ogni batch ricevuto (raw json)
 def debug_batch(batch_df, batch_id):
