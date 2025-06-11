@@ -1,0 +1,31 @@
+# Usa un'immagine base di Spark. Assicurati che la versione di Spark e Scala sia compatibile con i tuoi JARs.
+# Questa immagine bitnami/spark:3.5 è una buona base che include Python.
+FROM bitnami/spark:3.5
+
+# Imposta la directory di lavoro all'interno del container
+WORKDIR /opt/spark-apps
+
+# Copia i JARs dalla tua cartella locale 'config/spark/jars' alla cartella dei JARs di Spark nel container.
+# Assicurati che il percorso sorgente '../../config/spark/jars' sia corretto rispetto alla posizione del Dockerfile.
+# Dato che il contesto del build è la root del progetto, il percorso parte da lì.
+COPY config/spark/jars/spark-sql-kafka-0-10_2.12-3.5.0.jar /opt/bitnami/spark/jars/
+COPY config/spark/jars/kafka-clients-3.6.0.jar /opt/bitnami/spark/jars/
+COPY config/spark/jars/hadoop-aws-3.3.6.jar /opt/bitnami/spark/jars/
+COPY config/spark/jars/aws-java-sdk-bundle-1.11.1026.jar /opt/bitnami/spark/jars/
+COPY config/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.0.jar /opt/bitnami/spark/jars/
+# COPY config/spark/jars/commons-pool2-2.11.1.jar /opt/bitnami/spark/jars/
+
+# Copia il file dei requisiti Python e installa le dipendenze.
+# Assicurati di avere 'pyspark' nel tuo requirements.txt
+COPY spark-consumer-eutm/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia lo script Python dell'applicazione Spark nella directory di lavoro del container
+COPY spark-consumer-eutm/kafka_europeana_metadata_to_minio.py .
+
+# Comando per eseguire l'applicazione Spark quando il container viene avviato.
+# Usa spark-submit per lanciare lo script Python.
+# Le configurazioni per i JARs non sono più necessarie qui perché i JARs sono già nella cartella corretta.
+CMD ["spark-submit", \
+     "--master", "spark://spark-master:7077", \
+     "kafka_europeana_metadata_to_minio.py"]

@@ -1,8 +1,7 @@
-
 services:
   zookeeper:
     container_name: zookeeper
-    image: confluentinc/cp-zookeeper:7.5.3
+    image: confluentinc/cp-zookeeper:7.6.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
     volumes:
@@ -24,7 +23,7 @@ services:
   #  broker 1 
     container_name: kafka
     hostname: kafka
-    image: confluentinc/cp-kafka:7.5.3
+    image: confluentinc/cp-kafka:7.6.0
     depends_on:
       - zookeeper
     environment:
@@ -43,7 +42,7 @@ services:
 
   
   kafka2:
-    image: confluentinc/cp-kafka:7.5.3
+    image: confluentinc/cp-kafka:7.6.0
     container_name: kafka2
     hostname: kafka2
     depends_on:
@@ -171,14 +170,13 @@ services:
       - "7077:7077"
       - "8080:8080"
     volumes:
-    - ./spark-apps:/opt/spark-apps
     - ./spark-output:/opt/bitnami/spark/output
     - ./spark-logs:/opt/bitnami/spark/logs
     # Percorso per spark-defaults.conf (Bitnami standard)
-    - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+    # - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
     # Percorso per i JAR (come definito nel tuo Dockerfile)
     - ./config/spark/jars:/opt/spark/jars
-    build: ./docker/spark       # <--- cambia da image: a build # Usiamo 'build' perché hai un Dockerfile personalizzato
+    image: bitnami/spark:3.5.0 
     networks:
       - heritage-net
 #  7077	usata dai worker e dai spark-submit per comunicare col master
@@ -193,12 +191,11 @@ services:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
     volumes:
-      - ./spark-apps:/opt/spark-apps
       - ./spark-output:/opt/bitnami/spark/output
       - ./spark-logs:/opt/bitnami/spark/logs
-      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      # - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
       - ./config/spark/jars:/opt/spark/jars
-    build: ./docker/spark
+    image: bitnami/spark:3.5.0 
     networks:
       - heritage-net   
 
@@ -226,43 +223,62 @@ services:
      - heritage-net
 
 
-  spark-consumer-europeana:
-    container_name: spark-consumer-europeana
+  # spark-consumer-europeana:
+  #   container_name: spark-consumer-europeana
+  #   build:
+  #     context: . # <--- Il contesto di build è la radice del tuo progetto
+  #     dockerfile: spark-consumer-europeana/Dockerfile 
+  #   depends_on:
+  #     - spark-master
+  #     - kafka
+  #     - kafka2
+  #     # - kafka3
+  #     - minio
+  #   volumes:
+  #     # - ./spark-apps:/opt/spark-apps
+  #     # - ./config/spark/jars:/opt/spark/jars
+  #     - ./spark-output:/opt/bitnami/spark/output
+  #     # - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf # gia in dockerfile
+  #     - ./tmp/checkpoints:/tmp/checkpoints 
+  #   environment:
+  #     - SPARK_MODE=worker
+  #     - SPARK_MASTER_URL=spark://spark-master:7077
+  #   restart: always
+  #   networks:
+  #     - heritage-net
+
+  spark-consumer-eutm:
     build:
-      context: . # <--- Il contesto di build è la radice del tuo progetto
-      dockerfile: spark-consumer-europeana/Dockerfile 
+        context: . 
+        dockerfile: spark-consumer-eutm/Dockerfile2
+    container_name: spark-consumer-eutm
     depends_on:
       - spark-master
       - kafka
-      - kafka2
-      # - kafka3
       - minio
-    volumes:
-      # - ./spark-apps:/opt/spark-apps
-      # - ./config/spark/jars:/opt/spark/jars
-      - ./spark-output:/opt/bitnami/spark/output
-      # - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf # gia in dockerfile
-      - ./tmp/checkpoints:/tmp/checkpoints 
+      - kafka2
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_CORES=1
-      - SPARK_WORKER_MEMORY=1G
-    restart: always
-    networks:
-      - heritage-net
+          # Variabili d'ambiente che puoi passare alla tua applicazione Spark
+          KAFKA_BROKERS: kafka:9092,kafka2:9093 # Usa il nome del servizio Kafka e la porta interna
+          MINIO_ENDPOINT: http://minio:9000
+          MINIO_ACCESS_KEY: minio
+          MINIO_SECRET_KEY: minio123
+          MINIO_BUCKET: heritage
+          KAFKA_TOPIC: europeana_metadata
+    volumes:
+    - spark-eutm:/app
+    
 
 networks:
   heritage-net:
     driver: bridge
 
 volumes:
-  pgdata:
-  redis-data:
   minio-data:
   zookeeper-data:
   kafka-data:
   kafka2-data:
+  spark-eutm:
   # kafka3-data:
 
 

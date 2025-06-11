@@ -176,3 +176,5 @@ cython_debug/
 jars/
 jars_old/
 config/spark/jars/
+github_docker-kafka-spark-minio-stack-master/
+github_kafka-minio.ipynb
