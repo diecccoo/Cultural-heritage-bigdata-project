@@ -12,11 +12,11 @@ services:
     restart: always
     networks:
       - heritage-net
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0' # 1 CPU core
-          memory: 1G  # 1 Gigabyte di RAM
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1.0' # 1 CPU core
+    #       memory: 1G  # 1 Gigabyte di RAM
   # Kafka usa Zookeeper per gestire broker e coordinare i cluster.
 
   kafka:
@@ -41,25 +41,25 @@ services:
       - heritage-net
 
   
-  kafka2:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka2
-    hostname: kafka2
-    depends_on:
-      - zookeeper
-    environment:
-      KAFKA_BROKER_ID: 2
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
-    ports:
-      - "9093:9093"
-    restart: always
-    networks:
-    - heritage-net
-    volumes:
-      - kafka2-data:/var/lib/kafka/data
-      - ./config/kafka/server-2.properties:/etc/kafka/server.properties
+  # kafka2:
+  #   image: confluentinc/cp-kafka:7.6.0
+  #   container_name: kafka2
+  #   hostname: kafka2
+  #   depends_on:
+  #     - zookeeper
+  #   environment:
+  #     KAFKA_BROKER_ID: 2
+  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
+  #   ports:
+  #     - "9093:9093"
+  #   restart: always
+  #   networks:
+  #   - heritage-net
+  #   volumes:
+  #     - kafka2-data:/var/lib/kafka/data
+  #     - ./config/kafka/server-2.properties:/etc/kafka/server.properties
 
   # kafka3:
   #   image: confluentinc/cp-kafka:7.5.3
@@ -123,11 +123,11 @@ services:
       - "8081:8080"
     depends_on:
       - kafka
-      - kafka2
+      # - kafka2
       # - kafka3
     environment:
       - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092,kafka2:9093 #,kafka3:9094 <--- con kafka3
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092 #,kafka2:9093 #,kafka3:9094 <--- con kafka3
       - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
     networks:
       - heritage-net
@@ -172,11 +172,9 @@ services:
     volumes:
     - ./spark-output:/opt/bitnami/spark/output
     - ./spark-logs:/opt/bitnami/spark/logs
-    # Percorso per spark-defaults.conf (Bitnami standard)
-    # - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
-    # Percorso per i JAR (come definito nel tuo Dockerfile)
-    - ./config/spark/jars:/opt/spark/jars
-    image: bitnami/spark:3.5.0 
+    - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+    - ./config/spark/jars:/opt/bitnami/spark/jars
+    image: bitnami/spark:3.5.0  
     networks:
       - heritage-net
 #  7077	usata dai worker e dai spark-submit per comunicare col master
@@ -193,8 +191,8 @@ services:
     volumes:
       - ./spark-output:/opt/bitnami/spark/output
       - ./spark-logs:/opt/bitnami/spark/logs
-      # - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
-      - ./config/spark/jars:/opt/spark/jars
+      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./config/spark/jars:/opt/bitnami/spark/jars
     image: bitnami/spark:3.5.0 
     networks:
       - heritage-net   
@@ -213,7 +211,7 @@ services:
     build: ./europeana-scraper
     depends_on:
       - kafka
-      - kafka2
+      # - kafka2
       # - kafka3
       # - kafka-init
     restart: always
@@ -248,26 +246,24 @@ services:
   #     - heritage-net
 
   spark-consumer-eutm:
-    build:
-        context: . 
-        dockerfile: spark-consumer-eutm/Dockerfile2
     container_name: spark-consumer-eutm
+    build:
+      context: ./spark-consumer-eutm
+      dockerfile: Dockerfile
     depends_on:
       - spark-master
       - kafka
       - minio
-      - kafka2
-    environment:
-          # Variabili d'ambiente che puoi passare alla tua applicazione Spark
-          KAFKA_BROKERS: kafka:9092,kafka2:9093 # Usa il nome del servizio Kafka e la porta interna
-          MINIO_ENDPOINT: http://minio:9000
-          MINIO_ACCESS_KEY: minio
-          MINIO_SECRET_KEY: minio123
-          MINIO_BUCKET: heritage
-          KAFKA_TOPIC: europeana_metadata
+    restart: always
     volumes:
-    - spark-eutm:/app
-    
+      - ./spark-consumer-eutm/kafka_europeana_metadata_to_minio.py:/opt/spark-apps/kafka_europeana_metadata_to_minio.py
+      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
+      - ./config/spark/jars:/opt/bitnami/spark/jars
+    environment:
+      - SPARK_CONF_DIR=/opt/bitnami/spark/conf
+    networks:
+      - heritage-net
+
 
 networks:
   heritage-net:
@@ -277,7 +273,7 @@ volumes:
   minio-data:
   zookeeper-data:
   kafka-data:
-  kafka2-data:
+  # kafka2-data:
   spark-eutm:
   # kafka3-data:
 
