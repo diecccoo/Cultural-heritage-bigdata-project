@@ -31,6 +31,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
       - "9092:9092"
     volumes:
@@ -162,19 +163,10 @@ services:
     hostname: spark-master
     environment:
       - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
     ports:
-      - "7077:7077"
+      # - "7077:7077"
       - "8080:8080"
-    volumes:
-    - ./spark-output:/opt/bitnami/spark/output
-    - ./spark-logs:/opt/bitnami/spark/logs
-    - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
-    - ./config/spark/jars:/opt/bitnami/spark/jars
-    image: bitnami/spark:3.5.0  
+    image: bitnami/spark:latest
     networks:
       - heritage-net
 #  7077	usata dai worker e dai spark-submit per comunicare col master
@@ -188,12 +180,7 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-    volumes:
-      - ./spark-output:/opt/bitnami/spark/output
-      - ./spark-logs:/opt/bitnami/spark/logs
-      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
-      - ./config/spark/jars:/opt/bitnami/spark/jars
-    image: bitnami/spark:3.5.0 
+    image: bitnami/spark:latest
     networks:
       - heritage-net   
 
@@ -221,48 +208,14 @@ services:
      - heritage-net
 
 
-  # spark-consumer-europeana:
-  #   container_name: spark-consumer-europeana
-  #   build:
-  #     context: . # <--- Il contesto di build è la radice del tuo progetto
-  #     dockerfile: spark-consumer-europeana/Dockerfile 
-  #   depends_on:
-  #     - spark-master
-  #     - kafka
-  #     - kafka2
-  #     # - kafka3
-  #     - minio
-  #   volumes:
-  #     # - ./spark-apps:/opt/spark-apps
-  #     # - ./config/spark/jars:/opt/spark/jars
-  #     - ./spark-output:/opt/bitnami/spark/output
-  #     # - ./config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf # gia in dockerfile
-  #     - ./tmp/checkpoints:/tmp/checkpoints 
-  #   environment:
-  #     - SPARK_MODE=worker
-  #     - SPARK_MASTER_URL=spark://spark-master:7077
-  #   restart: always
-  #   networks:
-  #     - heritage-net
-
-  spark-consumer-eutm:
-    container_name: spark-consumer-eutm
-    build:
-      context: ./spark-consumer-eutm
-      dockerfile: Dockerfile
-    depends_on:
-      - spark-master
-      - kafka
-      - minio
-    restart: always
-    volumes:
-      - ./spark-consumer-eutm/kafka_europeana_metadata_to_minio.py:/opt/spark-apps/kafka_europeana_metadata_to_minio.py
-      - ./config/spark/spark-defaults.conf:/opt/bitnami/spark/conf/spark-defaults.conf
-      - ./config/spark/jars:/opt/bitnami/spark/jars
-    environment:
-      - SPARK_CONF_DIR=/opt/bitnami/spark/conf
-    networks:
-      - heritage-net
+  spark-consumer:
+        build:
+          context: .
+          dockerfile: ./spark-consumer/Dockerfile
+        container_name: spark-consumer
+        depends_on:
+          - kafka
+          - spark-master
 
 
 networks:
