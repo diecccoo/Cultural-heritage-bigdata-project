@@ -1,4 +1,6 @@
 # kafka_europeana_metadata_to_minio.py
+#script di matteo che prende i dati da kafka e li scrive su delta lake con spark
+
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
@@ -58,7 +60,7 @@ try:
         .load() \
 
 
-    print("📥 Connessione a Kafka stabilita, topic: wearables.bpm")
+    print("📥 Connessione a Kafka stabilita, topic: europeana_metadata")
 # cambiare questa riga per 3 brokers!!! (kafka3)
 # .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
 # .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093")

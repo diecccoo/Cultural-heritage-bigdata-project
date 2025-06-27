@@ -26,8 +26,8 @@ create_topic() {
 
 # Elenco dei topic da creare (puoi aggiungerne altri qui)
 # create_topic "nome_topic" numero_partizioni numero_repliche
-create_topic "user_annotations" 3 2
-create_topic "europeana_metadata" 3 2
+create_topic "user_annotations" 1 1 
+create_topic "europeana_metadata" 1 1
 
 
 echo " Waiting for Kafka to become ready..."

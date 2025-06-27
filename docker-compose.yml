@@ -29,17 +29,16 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
       - "9092:9092"
-    volumes:
-      - kafka-data:/var/lib/kafka/data
-      - ./config/kafka/server-1.properties:/etc/kafka/server.properties
     restart: always
     networks:
       - heritage-net
+
+    
 
   
   # kafka2:
@@ -103,18 +102,24 @@ services:
   #     - heritage-net
   # Un container leggero per interagire con Kafka da linea di comando
 
-  # kafka-init:
-  #   container_name: kafka-init
-  #   image: bitnami/kafka:latest
-  #   depends_on:
-  #     - kafka
-  #     - kafka2
-  #     - kafka3
-  #   volumes:
-  #     - ./config/kafka:/config/kafka
-  #   entrypoint: ["/bin/bash", "/config/kafka/create_kafka_topics.sh"]
-  #   networks:
-  #     - heritage-net
+  kafka-init:
+    container_name: kafka-init
+    image: bitnami/kafka:latest
+    depends_on:
+      - kafka
+      - kafka-ui
+    volumes:
+      - ./config/kafka:/config/kafka
+    entrypoint: 
+      - /bin/bash
+      - -c
+      - |
+        cp /config/kafka/create_kafka_topics.sh /tmp/create_kafka_topics.sh
+        sed -i 's/\r$//' /tmp/create_kafka_topics.sh
+        chmod +x /tmp/create_kafka_topics.sh
+        exec /tmp/create_kafka_topics.sh
+    networks:
+      - heritage-net
   # Questo container esegue uno script per creare i topic iniziali in Kafka
 
   kafka-ui:
@@ -184,23 +189,23 @@ services:
     networks:
       - heritage-net   
 
-  # simulate-user-annotations:
-  #   build:
-  #     context: ./simulate-user-annotations
-  #   depends_on:
-  #     - kafka
-  #     - kafka2
-  #     - kafka3
-  #   restart: always
+  annotation-producer:
+    container_name: annotation-producer
+    build:
+          context: .
+          dockerfile: ./annotation-producer/Dockerfile
+    depends_on:
+      - kafka
+      - minio
+    restart: always
+    networks:
+      - heritage-net
 
   europeana-scraper:
     container_name: europeana-scraper
     build: ./europeana-scraper
     depends_on:
       - kafka
-      # - kafka2
-      # - kafka3
-      # - kafka-init
     restart: always
     volumes:
       - ./europeana-scraper/state:/app/state
@@ -216,6 +221,8 @@ services:
         depends_on:
           - kafka
           - spark-master
+        networks:
+          - heritage-net
 
 
 networks:
