@@ -5,7 +5,7 @@
 
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
+from pyspark.sql.functions import from_json, col, current_timestamp
 from pyspark.sql.types import StructType, StringType, ArrayType
 
 #  Schema JSON dei messaggi inviati da Kafka
@@ -37,10 +37,11 @@ df_raw = spark.readStream \
     .option("startingOffsets", "latest") \
     .load()
 
-#  Parsing del campo `value` come JSON
+#  Parsing del campo `value` come JSON e aggiunta timestamp
 df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json") \
     .select(from_json(col("json"), schema).alias("data")) \
-    .select("data.*")
+    .select("data.*") \
+    .withColumn("ingestion_time", current_timestamp())
 
 #  Scrittura dei messaggi su MinIO in formato JSON
 query = df_parsed.writeStream \
