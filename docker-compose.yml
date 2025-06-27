@@ -198,6 +198,13 @@ services:
       - kafka
       - minio
     restart: always
+    environment: #environment aggiunto, prima non c'era
+      # Credenziali per MinIO
+      AWS_ACCESS_KEY_ID:     minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      S3A_ENDPOINT:          http://minio:9000
+      # Broker Kafka
+      KAFKA_BROKER:          kafka:9092
     networks:
       - heritage-net
 
