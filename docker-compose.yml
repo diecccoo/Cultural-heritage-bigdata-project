@@ -234,7 +234,7 @@ services:
   ugc-to-minio-consumer:
     build:
       context: .
-      dockerfile: ./ugc-to-minio-consumer/Dockerfile 
+      dockerfile: ./spark-apps/ugc-to-minio-consumer/Dockerfile 
     container_name: ugc-to-minio-consumer
     depends_on:
       - kafka
@@ -242,6 +242,19 @@ services:
       - spark-master
     networks:
       - heritage-net
+  
+  ugc-to-parquet-consumer:
+    build:
+      context: .
+      dockerfile: ./spark-apps/cleans-to-parquet/Dockerfile
+    container_name: ugc-to-parquet-consumer
+    depends_on:
+      - spark-master
+      - minio
+    restart: always
+    networks:
+      - heritage-net
+
 
 
 networks:

@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
 USER 1001
 
 # Copia gli script nello container
-COPY ugc-to-minio-consumer/ .
+COPY spark-apps/ugc-to-minio-consumer/ .
+
 
 # Avvio dello script con i pacchetti necessari: Delta + Kafka
 CMD spark-submit \
