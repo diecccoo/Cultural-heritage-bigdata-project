@@ -256,6 +256,48 @@ services:
       - heritage-net
 
 
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: heritage
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - heritage
+
+
+  eu-to-postgres:
+   #spark job
+    build:
+      context: ./spark-apps/minio_to_postgres
+    command: >
+      spark-submit /app/delta_to_postgres.py
+    depends_on:
+      - postgres
+      - minio
+      - spark-master
+    networks:
+      - heritage
+ 
+  ugc-to-postgres:
+    build:
+      context: ./spark-apps/ugc_to_postgres
+    command: >
+      spark-submit /app/ugc_to_postgres.py
+    depends_on:
+      - postgres
+      - minio
+      - spark-master
+    networks:
+      - heritage
+
 
 networks:
   heritage-net:
@@ -268,6 +310,7 @@ volumes:
   # kafka2-data:
   spark-eutm:
   # kafka3-data:
+  postgres-data:
 
 
 
