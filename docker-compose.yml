@@ -257,17 +257,20 @@ services:
     networks:
       - heritage-net
   
-  ugc-to-parquet-consumer:
-    build:
-      context: .
-      dockerfile: ./spark-apps/ugc-to-parquet-consumer/Dockerfile
-    container_name: ugc-to-parquet-consumer
-    depends_on:
-      - spark-master
-      - minio
-    restart: always
-    networks:
-      - heritage-net
+  
+  # Per ora non serve, siccome i nostri commenti sono generati da un producer conosciamo lo scheme e non dobbiamo fare pulizia
+ 
+  # ugc-to-parquet-consumer:   
+  #   build:
+  #     context: .
+  #     dockerfile: ./spark-apps/ugc-to-parquet-consumer/Dockerfile
+  #   container_name: ugc-to-parquet-consumer
+  #   depends_on:
+  #     - spark-master
+  #     - minio
+  #   restart: always
+  #   networks:
+  #     - heritage-net
 
 
   postgres:
