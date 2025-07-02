@@ -51,11 +51,14 @@ def main():
     create_bucket(s3, BUCKET_NAME)
 
     folders = [
-        "raw/metadata/metadata_ugc/",
-        "raw/metadata/metadata_europeana/",
+        "raw/metadata/europeana_metadata/",
+        "raw/metadata/user_generated_content/",
         "raw/images/",
-        "parquet/metadata_europeana/"
+        "cleansed/europeana/",
+        "cleansed/user_generated/",
+        "curated/join_metadata/"
     ]
+
 
     for folder in folders:
         create_folder(s3, BUCKET_NAME, folder)

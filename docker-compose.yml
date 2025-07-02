@@ -189,24 +189,6 @@ services:
     networks:
       - heritage-net   
 
-  annotation-producer:
-    container_name: annotation-producer
-    build:
-          context: .
-          dockerfile: ./annotation-producer/Dockerfile
-    depends_on:
-      - kafka
-      - minio
-    restart: always
-    environment: #environment aggiunto, prima non c'era
-      # Credenziali per MinIO
-      AWS_ACCESS_KEY_ID:     minio
-      AWS_SECRET_ACCESS_KEY: minio123
-      S3A_ENDPOINT:          http://minio:9000
-      # Broker Kafka
-      KAFKA_BROKER:          kafka:9092
-    networks:
-      - heritage-net
 
   europeana-scraper:
     container_name: europeana-scraper
@@ -231,6 +213,38 @@ services:
         networks:
           - heritage-net
 
+  spark-cleansing-eu-to-delta:
+    build:
+          context: .
+          dockerfile: ./spark-apps/spark-cleansing-eu-to-delta/Dockerfile
+    container_name: spark-cleansing-eu-to-delta
+    restart: always
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+    networks:
+      - heritage-net
+
+  annotation-producer:
+    container_name: annotation-producer
+    build:
+          context: .
+          dockerfile: ./annotation-producer/Dockerfile
+    depends_on:
+      - kafka
+      - minio
+    restart: always
+    environment: 
+      AWS_ACCESS_KEY_ID:     minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      S3A_ENDPOINT:          http://minio:9000
+      KAFKA_BROKER:          kafka:9092
+    networks:
+      - heritage-net
+
   ugc-to-minio-consumer:
     build:
       context: .
@@ -246,7 +260,7 @@ services:
   ugc-to-parquet-consumer:
     build:
       context: .
-      dockerfile: ./spark-apps/cleans-to-parquet/Dockerfile
+      dockerfile: ./spark-apps/ugc-to-parquet-consumer/Dockerfile
     container_name: ugc-to-parquet-consumer
     depends_on:
       - spark-master
@@ -270,13 +284,13 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - heritage
+      - heritage-net
 
 
   eu-to-postgres:
    #spark job
     build:
-      context: ./spark-apps/minio_to_postgres
+      context: ./spark-apps/eu-to-postgres
     command: >
       spark-submit /app/delta_to_postgres.py
     depends_on:
@@ -284,11 +298,11 @@ services:
       - minio
       - spark-master
     networks:
-      - heritage
+      - heritage-net
  
   ugc-to-postgres:
     build:
-      context: ./spark-apps/ugc_to_postgres
+      context: ./spark-apps/ugc-to-postgres
     command: >
       spark-submit /app/ugc_to_postgres.py
     depends_on:
@@ -296,7 +310,7 @@ services:
       - minio
       - spark-master
     networks:
-      - heritage
+      - heritage-net
 
 
 networks:

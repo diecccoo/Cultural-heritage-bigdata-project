@@ -14,7 +14,7 @@ import logging
 
 MAX_RETRIES = 10
 SLEEP_BETWEEN_RETRIES = 30
-WAIT_AFTER_SUCCESS = 1500 # 20 minutes in seconds
+WAIT_AFTER_SUCCESS = 600 # 10 minutes in seconds
 
 logging.basicConfig(
     level=logging.INFO,

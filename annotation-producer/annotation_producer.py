@@ -26,7 +26,7 @@ spark = (SparkSession.builder
 )
 
 guids = (spark.read.format("delta")
-    .load("s3a://heritage/parquet/metadata_europeana")
+    .load("s3a://heritage/cleansed/europeana")
     .select("guid").distinct()
     .rdd.map(lambda r: r[0]).collect())
 spark.stop()
@@ -45,7 +45,8 @@ user_ids =[f"user{i:04d}" for i in range(1, 401)] + [
     "museumlover", "artfan21", "picasso88", "anon123", "visitorX",
     "curator42", "historybuff", "artexpert", "randomnick", "user_xyz",
     "artefatto90", "louvrefan", "duomofreak", "restauratore75", "collezionista33",
-    "historygeek", "antiquarian", "culturalbuff", "docentX", "digitalcurator"
+    "historygeek", "antiquarian", "culturalbuff", "docentX", "digitalcurator", "pippo",
+    "pluto", "paperino", "mickeymouse", "donaldduck", "pippofranco",
 ]
 
 tags_pool = [
@@ -155,4 +156,4 @@ while True:
     }
     producer.send(KAFKA_TOPIC, annotation)
     print("Pubblicata:", annotation)
-    time.sleep(20)
+    time.sleep(5)  # Attendi 5 secondi tra le pubblicazioni

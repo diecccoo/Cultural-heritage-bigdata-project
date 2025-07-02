@@ -7,7 +7,12 @@ from pyspark.sql.functions import from_json, col
 import traceback
 import time
 from pyspark.sql.types import StructType, StringType, ArrayType
+import json
+import uuid
+import re
 
+def sanitize_filename(name):
+    return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
 # Schema dei metadati Europeana
 schema = StructType() \
@@ -76,11 +81,47 @@ try:
 
 
     # Scrittura su Delta Lake (MinIO)
+    def write_each_row_as_json(batch_df, batch_id):
+        print(f"📦 Scrittura batch {batch_id}...")
+        
+        s3_base = "s3a://heritage/raw/metadata/europeana_metadata/"
+        rows = batch_df.collect()
+
+        for row in rows:
+            try:
+                # Usa il guid oppure crea un nome univoco
+                guid = row["guid"] or f"no-guid-{uuid.uuid4()}"
+                safe_guid = sanitize_filename(guid)
+                file_name = f"{safe_guid}.json"
+                file_path = s3_base + file_name
+
+
+                # Converto riga in JSON puro (dict -> str)
+                json_data = json.dumps(row.asDict())
+
+                # Scrivo usando Hadoop FileSystem API di Spark
+                hadoop_conf = spark._jsc.hadoopConfiguration()
+                fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(
+                    spark._jvm.java.net.URI(s3_base),
+                    hadoop_conf
+                )
+
+                output_stream = fs.create(spark._jvm.org.apache.hadoop.fs.Path(file_path))
+                output_stream.write(bytearray(json_data, "utf-8"))
+                output_stream.close()
+
+                # print(f"✅ Scritto: {file_name}")
+            except Exception as e:
+                print(f"❌ Errore nella scrittura di {row}: {e}")
+        print(f"📦 Batch {batch_id} completato")
+
     query = parsed_df.writeStream \
-        .format("delta") \
-        .outputMode("append") \
-        .option("checkpointLocation", "s3a://heritage/parquet/metadata_europeana/_checkpoints") \
-        .start("s3a://heritage/parquet/metadata_europeana/")
+    .foreachBatch(write_each_row_as_json) \
+    .outputMode("append") \
+    .option("checkpointLocation", "s3a://heritage/raw/metadata/europeana_metadata/_checkpoints_eachjson") \
+    .start()
+
+
 
     query.awaitTermination()
 

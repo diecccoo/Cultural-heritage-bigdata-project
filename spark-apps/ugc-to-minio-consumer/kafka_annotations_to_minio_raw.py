@@ -8,7 +8,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, current_timestamp
 from pyspark.sql.types import StructType, StringType, ArrayType
 
-#  Schema JSON dei messaggi inviati da Kafka
+# Schema dei messaggi Kafka (user annotations)
 schema = StructType() \
     .add("object_id", StringType()) \
     .add("user_id", StringType()) \
@@ -17,9 +17,15 @@ schema = StructType() \
     .add("timestamp", StringType()) \
     .add("location", StringType())
 
-#  Crea la SparkSession configurata per MinIO (s3a)
+# SparkSession configurata per MinIO con Delta support
 spark = SparkSession.builder \
-    .appName("KafkaToMinIOAnnotations") \
+    .appName("KafkaToMinIOAnnotationsDelta") \
+    .config("spark.jars.packages",
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,"
+            "io.delta:delta-core_2.12:2.4.0,"
+            "org.apache.hadoop:hadoop-aws:3.3.4") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
     .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
     .config("spark.hadoop.fs.s3a.access.key", "minio") \
     .config("spark.hadoop.fs.s3a.secret.key", "minio123") \
@@ -29,7 +35,7 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("WARN")
 
-#  Lettura in streaming dal topic Kafka
+# Lettura dallo stream Kafka
 df_raw = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka:9092") \
@@ -37,18 +43,17 @@ df_raw = spark.readStream \
     .option("startingOffsets", "latest") \
     .load()
 
-#  Parsing del campo `value` come JSON e aggiunta timestamp
+# Parsing del campo `value` come JSON e aggiunta di `ingestion_time`
 df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json") \
     .select(from_json(col("json"), schema).alias("data")) \
     .select("data.*") \
     .withColumn("ingestion_time", current_timestamp())
 
-#  Scrittura dei messaggi su MinIO in formato JSON
+# Scrittura su Delta Lake in MinIO
 query = df_parsed.writeStream \
-    .format("json") \
-    .option("path", "s3a://heritage/raw/metadata/metadata_ugc/") \
-    .option("checkpointLocation", "/tmp/checkpoints/annotations-ingestion") \
+    .format("delta") \
     .outputMode("append") \
-    .start()
+    .option("checkpointLocation", "s3a://heritage/raw/metadata/user_generated_content/_checkpoints") \
+    .start("s3a://heritage/raw/metadata/user_generated_content/")
 
 query.awaitTermination()

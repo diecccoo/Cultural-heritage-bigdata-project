@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
 USER 1001
 
 # Copia gli script nel container
-COPY spark-apps/cleans-to-parquet/ .
+COPY spark-apps/ugc-to-parquet-consumer/ .
 
 # Lancia lo scheduler (che ogni N secondi esegue spark-submit)
 CMD ["python", "scheduler.py"]
