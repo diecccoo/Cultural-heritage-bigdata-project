@@ -271,6 +271,19 @@ services:
     networks:
       - heritage-net
 
+  join-eu-ugc-curated:
+    build:
+      context: .
+      dockerfile: ./spark-apps/join-eu-ugc-curated/Dockerfile
+    container_name: join-eu-ugc-curated
+    restart: always
+    depends_on:
+      - spark-master
+      - minio
+    networks:
+      - heritage-net
+
+
 
   postgres:
     image: postgres:15
@@ -285,6 +298,22 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - heritage-net
+
+  pgadmin:
+    image: dpage/pgadmin4:8.5
+    container_name: pgadmin
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@heritage.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
     networks:
       - heritage-net
 
@@ -327,6 +356,7 @@ volumes:
   spark-eutm:
   # kafka3-data:
   postgres-data:
+  pgadmin_data:
 
 
 

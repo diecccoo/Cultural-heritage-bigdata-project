@@ -1,7 +1,7 @@
 import time
 import os
 
-INTERVAL_MINUTES = 30  # Cambia qui per modificare la frequenza
+INTERVAL_MINUTES = 15  # Cambia qui per modificare la frequenza
 
 while True:
     print("[Scheduler] Avvio job Spark di cleansing metadati Europeana...")
