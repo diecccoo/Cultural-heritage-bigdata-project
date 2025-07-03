@@ -1,7 +1,7 @@
 import time
 import os
 
-INTERVAL_MINUTES = 10  # Modifica se vuoi un'altra frequenza
+INTERVAL_MINUTES = 5  # Modifica se vuoi un'altra frequenza
 
 while True:
     print("[Scheduler] Avvio job Spark per pulizia e Parquet...")
@@ -12,7 +12,7 @@ while True:
         "--packages io.delta:delta-spark_2.12:3.3.1 "
         "--conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension "
         "--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog "
-        "/app/ugc_delta_to_deltatable.py"
+        "/app/ugc_raw_to_cleansed.py"
     )
 
     if exit_code == 0:

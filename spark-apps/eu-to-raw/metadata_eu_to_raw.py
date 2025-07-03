@@ -29,7 +29,6 @@ schema = StructType() \
     .add("format", StringType()) \
     .add("rights", StringType()) \
     .add("dataProvider", StringType()) \
-    .add("isShownAt", StringType()) \
     .add("isShownBy", StringType()) \
     .add("edm_rights", StringType())
 

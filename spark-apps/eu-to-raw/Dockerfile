@@ -11,8 +11,7 @@ RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
 USER 1001
 
 # Copia gli script nello container
-COPY spark-apps/ugc-to-minio-consumer/ .
-
+COPY spark-apps/eu-to-raw/ .
 
 # Avvio dello script con i pacchetti necessari: Delta + Kafka
 CMD spark-submit \
@@ -20,4 +19,4 @@ CMD spark-submit \
   --packages io.delta:delta-spark_2.12:3.3.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.5 \
   --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  kafka_annotations_to_minio_raw.py
+  metadata_eu_to_raw.py

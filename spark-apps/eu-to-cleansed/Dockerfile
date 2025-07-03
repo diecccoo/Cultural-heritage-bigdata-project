@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
 USER 1001
 
 # Copia gli script nel container
-COPY spark-apps/spark-cleansing-eu-to-delta/ .
+COPY spark-apps/eu-to-cleansed/ .
 
 # Lancia lo scheduler
 CMD ["python", "scheduler.py"]

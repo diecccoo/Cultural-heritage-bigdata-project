@@ -202,22 +202,22 @@ services:
      - heritage-net
 
 
-  spark-consumer:
+  eu-to-raw:
         build:
           context: .
-          dockerfile: ./spark-consumer/Dockerfile
-        container_name: spark-consumer
+          dockerfile: ./spark-apps/eu-to-raw/Dockerfile
+        container_name: eu-to-raw
         depends_on:
           - kafka
           - spark-master
         networks:
           - heritage-net
 
-  spark-cleansing-eu-to-delta:
+  eu-to-cleansed:
     build:
           context: .
-          dockerfile: ./spark-apps/spark-cleansing-eu-to-delta/Dockerfile
-    container_name: spark-cleansing-eu-to-delta
+          dockerfile: ./spark-apps/eu-to-cleansed/Dockerfile
+    container_name: eu-to-cleansed
     restart: always
     depends_on:
       - kafka
@@ -245,11 +245,12 @@ services:
     networks:
       - heritage-net
 
-  ugc-to-minio-consumer:
+  ugc-to-raw:
     build:
       context: .
-      dockerfile: ./spark-apps/ugc-to-minio-consumer/Dockerfile 
-    container_name: ugc-to-minio-consumer
+      dockerfile: ./spark-apps/ugc-to-raw/Dockerfile 
+    container_name: ugc-to-raw
+    restart: always
     depends_on:
       - kafka
       - minio
@@ -258,19 +259,17 @@ services:
       - heritage-net
   
   
-  # Per ora non serve, siccome i nostri commenti sono generati da un producer conosciamo lo scheme e non dobbiamo fare pulizia
- 
-  # ugc-to-parquet-consumer:   
-  #   build:
-  #     context: .
-  #     dockerfile: ./spark-apps/ugc-to-parquet-consumer/Dockerfile
-  #   container_name: ugc-to-parquet-consumer
-  #   depends_on:
-  #     - spark-master
-  #     - minio
-  #   restart: always
-  #   networks:
-  #     - heritage-net
+  ugc-to-cleansed:   
+    build:
+      context: .
+      dockerfile: ./spark-apps/ugc-to-cleansed/Dockerfile
+    container_name: ugc-to-cleansed
+    depends_on:
+      - spark-master
+      - minio
+    restart: always
+    networks:
+      - heritage-net
 
 
   postgres:
