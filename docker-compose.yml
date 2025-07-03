@@ -140,6 +140,14 @@ services:
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
 
+  minio-init:
+    container_name: minio-init
+    build: ./config/minio
+    depends_on:
+      - minio
+    networks:
+      - heritage-net
+
   minio:
     container_name: minio
     image: minio/minio
@@ -152,14 +160,6 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
     command: server /data --console-address ":9001"
-    networks:
-      - heritage-net
-
-  minio-init:
-    container_name: minio-init
-    build: ./config/minio
-    depends_on:
-      - minio
     networks:
       - heritage-net
 
