@@ -1,14 +1,15 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, to_timestamp
+from pyspark.sql.functions import col, to_timestamp, expr
+from pyspark.sql.functions import element_at
 import sys
 
 def log(msg):
-    print(f"[UGC→Postgres] {msg}")
+    print(f"[Curated→Postgres] {msg}")
 
 log("Inizio script Spark")
 
 # Crea la sessione Spark
-spark = SparkSession.builder.appName("UGCtoPostgres").getOrCreate()
+spark = SparkSession.builder.appName("CuratedToPostgres").getOrCreate()
 
 log("Sessione Spark creata")
 
@@ -23,28 +24,32 @@ hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
 log("Configurazione MinIO completata")
 
 try:
-    # Legge Delta Lake UGC
-    df = spark.read.format("delta").load("s3a://heritage/cleansed/user_generated/")
-    log("Delta UGC caricato correttamente")
+    # Legge la Delta Table joinata
+    df = spark.read.format("delta").load("s3a://heritage/curated/join_metadata/")
+    log("Delta join_metadata caricata correttamente")
 
-    # Mappa i campi per PostgreSQL
+
+    # Seleziona e mappa i campi desiderati (immagine e link convertiti da array a stringa)
     df_mapped = df.select(
-        col("object_id").alias("object_guid"),
+        col("guid"),
         col("user_id"),
-        col("comment"),
         col("tags"),
+        col("comment"),
         to_timestamp(col("timestamp")).alias("ugc_timestamp"),
-        col("location")
+        col("location"),
+        col("description"),
+        col("image_url"),
+        col("title")
     )
 
-    log("Schema mappato per PostgreSQL")
+    log("Schema pronto per PostgreSQL")
     df_mapped.printSchema()
 
     # Scrive su PostgreSQL
     df_mapped.write \
         .format("jdbc") \
         .option("url", "jdbc:postgresql://postgres:5432/heritage") \
-        .option("dbtable", "ugc_annotations") \
+        .option("dbtable", "curated_objects") \
         .option("user", "postgres") \
         .option("password", "postgres") \
         .option("driver", "org.postgresql.Driver") \
