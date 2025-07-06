@@ -283,6 +283,17 @@ services:
     networks:
       - heritage-net
 
+  embeddings-extractor:
+    build:
+      context: .
+      dockerfile: ./spark-apps/embedding-extractor/Dockerfile
+    container_name: embeddings-extractor
+    restart: always
+    depends_on:
+      - spark-master
+      - minio
+    networks:
+      - heritage-net
 
 
   postgres:
