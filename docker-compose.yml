@@ -140,14 +140,6 @@ services:
   # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
   # Vai su http://localhost:8081 per usare la GUI.
 
-  minio-init:
-    container_name: minio-init
-    build: ./config/minio
-    depends_on:
-      - minio
-    networks:
-      - heritage-net
-
   minio:
     container_name: minio
     image: minio/minio
@@ -163,6 +155,14 @@ services:
     networks:
       - heritage-net
 
+  minio-init:
+    container_name: minio-init
+    build: ./config/minio
+    depends_on:
+      - minio
+    networks:
+      - heritage-net
+      
   spark-master:
     container_name: spark-master
     hostname: spark-master
@@ -283,6 +283,19 @@ services:
     networks:
       - heritage-net
 
+  embeddings-extractor:
+    build:
+      context: .
+      dockerfile: ./spark-apps/embeddings-extractor/Dockerfile
+    container_name: embeddings-extractor
+    restart: always
+    depends_on:
+      - spark-master
+      - minio
+    environment:
+      - TRANSFORMERS_CACHE=s3a://heritage/cache/hf-models
+    networks:
+      - heritage-net
 
 
   postgres:

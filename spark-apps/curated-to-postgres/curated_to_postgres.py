@@ -49,7 +49,7 @@ try:
     df_mapped.write \
         .format("jdbc") \
         .option("url", "jdbc:postgresql://postgres:5432/heritage") \
-        .option("dbtable", "curated_objects") \
+        .option("dbtable", "join_metadata") \
         .option("user", "postgres") \
         .option("password", "postgres") \
         .option("driver", "org.postgresql.Driver") \
