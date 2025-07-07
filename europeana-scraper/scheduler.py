@@ -14,7 +14,7 @@ import logging
 
 MAX_RETRIES = 10
 SLEEP_BETWEEN_RETRIES = 30
-WAIT_AFTER_SUCCESS = 600 # 10 minutes in seconds
+WAIT_AFTER_SUCCESS = 900 # 15 minutes in seconds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,7 +44,7 @@ def run_script_with_retries():
 while True:
     success = run_script_with_retries()
     if success:
-        logging.info("🛌 Sleeping for 20 minutes before next execution...")
+        logging.info("🛌 Sleeping for ... minutes before next execution...")
         time.sleep(WAIT_AFTER_SUCCESS)
     else:
         logging.info("🔁 Will retry from scratch in next cycle.")

@@ -17,11 +17,22 @@ RUN pip install --no-cache-dir \
     pandas \
     numpy
 
+# Crea la directory di cache e assicura i permessi
+RUN mkdir -p /tmp/hf-cache && chmod -R 777 /tmp/hf-cache
+
+ENV HF_HOME=/tmp/hf-cache
+
+# Imposta la variabile di ambiente per la cache HuggingFace
+ENV TRANSFORMERS_CACHE=/tmp/hf-cache
+
+
+
+
 # Torna all'utente non-root
 USER 1001
 
 # Copia gli script del container embeddings-extractor
-COPY spark-apps/embedding-extractor/ .
+COPY spark-apps/embeddings-extractor/ .
 
 # Avvio dello script con Delta Lake (usa PySpark locale per batch CPU)
 CMD spark-submit \
