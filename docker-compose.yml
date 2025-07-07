@@ -294,8 +294,6 @@ services:
       - minio
     environment:
       - TRANSFORMERS_CACHE=s3a://heritage/cache/hf-models
-    volumes:
-      - ./spark-apps/embeddings-extractor/hf_cache:/root/.cache/huggingface
     networks:
       - heritage-net
 

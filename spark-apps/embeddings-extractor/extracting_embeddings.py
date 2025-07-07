@@ -19,9 +19,9 @@ import ast
 MINIO_ENDPOINT = "http://minio:9000"
 MINIO_ACCESS_KEY = "minio"
 MINIO_SECRET_KEY = "minio123"
-CURATED_PATH = "s3a://heritage/curated/join_metadata/"
-EMBEDDING_PATH = "s3a://heritage/curated/embeddings/"
-STATE_FILE_PATH = "s3a://heritage/curated/embedding_last_processed.txt"
+CLEANSED_PATH = "s3a://heritage/cleansed/europeana/"
+EMBEDDING_PATH = "s3a://heritage/cleansed/embeddings/"
+STATE_FILE_PATH = "s3a://heritage/cleansed/embedding_last_processed.txt"
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
 SLEEP_SECONDS = 60
 
@@ -79,18 +79,17 @@ def write_last_processed_guid(guid):
     print(f"[STATE] File di stato aggiornato con guid: {guid}")
 
 def get_new_records(last_guid):
-    df = spark.read.format("delta").load(CURATED_PATH)
+    df = spark.read.format("delta").load(CLEANSED_PATH)
     if last_guid:
         df = df.filter(col("guid") > last_guid)
     return df.orderBy(col("guid").asc())
 
 def preprocess_text(row):
-    # Ordine: title, subject, creator, type, tags, description
+    # Ordine: title, subject, creator, type, description
     title = str(row["title"]) if row["title"] else ""
     subject = str(row["subject"]) if row["subject"] else ""
     creator = str(row["creator"]) if row["creator"] else ""
     type_ = str(row["type"]) if row["type"] else ""
-    tags = ", ".join(row["tags"]) if row["tags"] else ""
     # Taglia description a max 150 caratteri per non saturare i token CLIP
     description = str(row["description"])[:150] if row["description"] else ""
 
@@ -100,7 +99,6 @@ def preprocess_text(row):
         subject,
         creator,
         type_,
-        tags,
         description
     ])
     return text.strip()
@@ -160,7 +158,7 @@ while True:
         time.sleep(SLEEP_SECONDS)
         continue
 
-    columns = ["guid", "tags", "title", "description", "type", "subject", "creator", "IsShownBy"]
+    columns = ["guid", "title", "description", "type", "subject", "creator", "isShownBy"]
     pandas_df = df_new.select(*columns).toPandas()
     print(f"[INFO] Record da processare: {len(pandas_df)}")
 
@@ -183,7 +181,7 @@ while True:
         )
 
         # 3. Ora text_input è sicuro da passare al modello (mai più di 77 token)
-        image_url = row["IsShownBy"]
+        image_url = row["isShownBy"]
         if isinstance(image_url, list):
             image_url = image_url[0] if len(image_url) > 0 else None
         elif isinstance(image_url, str) and image_url.startswith("[") and image_url.endswith("]"):
