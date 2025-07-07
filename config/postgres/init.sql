@@ -29,7 +29,7 @@
 -- );
 
 
-CREATE TABLE join_metadata (
+CREATE TABLE join_metadataex (
     id_object TEXT PRIMARY KEY,
     title TEXT,
     creator TEXT,
