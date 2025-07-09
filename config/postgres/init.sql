@@ -29,14 +29,14 @@
 -- );
 
 
-CREATE TABLE join_metadataex (
+CREATE TABLE IF NOT EXISTS join_metadata (
     id_object TEXT PRIMARY KEY,
     title TEXT,
     creator TEXT,
     description TEXT,
     image_url TEXT,
-    comment_text TEXT,
+    comment TEXT,
     user_id TEXT,
-    annotation_timestamp TIMESTAMPTZ,
+    annotation_timestamp TIMESTAMP,
     tags TEXT[]
 );
