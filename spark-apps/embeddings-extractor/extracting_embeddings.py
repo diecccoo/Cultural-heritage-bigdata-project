@@ -25,8 +25,9 @@ STATE_FILE_PATH = "s3a://heritage/cleansed/embedding_last_processed.txt"
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
 SLEEP_SECONDS = 60
 
-
-
+# ========== NUOVE CONFIGURAZIONI ==========
+LIMIT_RECORDS = 112  # Limita i record per ciclo Spark (gestione RAM)
+BATCH_SIZE = 16      # Batch size per embedding CLIP
 
 # ========== INIZIALIZZA SPARK ==========
 spark = SparkSession.builder \
@@ -41,8 +42,11 @@ spark = SparkSession.builder \
     .getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
-# ========== INIZIALIZZA CLIP ==========
-device = "cpu"
+# ========== INIZIALIZZA CLIP CON SUPPORTO GPU/CPU ==========
+# Supporto automatico cuda/cpu
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"[DEVICE] Utilizzando dispositivo: {device}")
+
 clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)
 clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
@@ -82,7 +86,10 @@ def get_new_records(last_guid):
     df = spark.read.format("delta").load(CLEANSED_PATH)
     if last_guid:
         df = df.filter(col("guid") > last_guid)
-    return df.orderBy(col("guid").asc())
+    # Limita i record a LIMIT_RECORDS per ciclo Spark (gestione RAM)
+    df = df.orderBy(col("guid").asc()).limit(LIMIT_RECORDS)
+    print(f"[SPARK] Limitando a {LIMIT_RECORDS} record per ciclo per gestione RAM")
+    return df
 
 def preprocess_text(row):
     # Ordine: title, subject, creator, type, description
@@ -103,28 +110,115 @@ def preprocess_text(row):
     ])
     return text.strip()
 
-
 def fetch_image(url):
+    import requests
     from PIL import Image
+    import io
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://viewer.cbl.ie/",
+    }
+
     try:
-        resp = requests.get(url, timeout=8)
-        img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-        return img
+        response = requests.get(url, headers=headers, timeout=10)
+        content_type = response.headers.get("Content-Type", "")
+        content_length = len(response.content)
+        print(f"[DEBUG] URL: {url}")
+        print(f"[DEBUG] Content-Type: {content_type}, Bytes: {content_length}")
+
+        if not content_type.startswith("image/"):
+            print(f"[WARN] Non è un'immagine valida: {url}")
+            print(f"[BODY] {response.text[:300]}")
+            return None
+
+        image = Image.open(io.BytesIO(response.content)).convert("RGB")
+        return image
+
     except Exception as e:
-        print(f"[IMAGE] Fallito il download dell'immagine: {url} ({e})")
+        print(f"[ERROR] Eccezione nel download immagine: {url} ({e})")
         return None
 
-def get_embeddings(texts, images):
-    inputs = clip_processor(
-        text=texts,
-        images=images,
-        return_tensors="pt",
-        padding=True
-    )
-    with torch.no_grad():
-        text_embeds = clip_model.get_text_features(**{k: v.to(device) for k, v in inputs.items() if k.startswith('input_ids') or k.startswith('attention_mask')})
-        image_embeds = clip_model.get_image_features(**{k: v.to(device) for k, v in inputs.items() if k.startswith('pixel_values')})
-    return text_embeds.cpu().numpy(), image_embeds.cpu().numpy()
+
+def get_embeddings_batch(texts, images):
+    """
+    Nuova funzione per embedding batch con gestione OOM
+    """
+    try:
+        # Prepara gli input per il batch
+        inputs = clip_processor(
+            text=texts,
+            images=images,
+            return_tensors="pt",
+            padding=True
+        )
+        
+        # Sposta gli input sul device (GPU/CPU)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        
+        with torch.no_grad():
+            # Gestione OOM con try/except
+            try:
+                # Estrai embedding di testo e immagine
+                text_embeds = clip_model.get_text_features(
+                    input_ids=inputs.get('input_ids'),
+                    attention_mask=inputs.get('attention_mask')
+                )
+                image_embeds = clip_model.get_image_features(
+                    pixel_values=inputs.get('pixel_values')
+                )
+                
+                return text_embeds.cpu().numpy(), image_embeds.cpu().numpy()
+                
+            except torch.cuda.OutOfMemoryError as e:
+                print(f"[OOM] Out of Memory rilevato nel batch, svuotando cache CUDA: {e}")
+                # Svuota la cache CUDA
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Fallback: processa singolarmente (lento ma sicuro)
+                print(f"[OOM] Fallback a processamento singolo per {len(texts)} elementi")
+                text_embeds_list = []
+                image_embeds_list = []
+                
+                for i, (text, image) in enumerate(zip(texts, images)):
+                    try:
+                        single_inputs = clip_processor(
+                            text=[text],
+                            images=[image],
+                            return_tensors="pt",
+                            padding=True
+                        )
+                        single_inputs = {k: v.to(device) for k, v in single_inputs.items()}
+                        
+                        with torch.no_grad():
+                            text_embed = clip_model.get_text_features(
+                                input_ids=single_inputs.get('input_ids'),
+                                attention_mask=single_inputs.get('attention_mask')
+                            )
+                            image_embed = clip_model.get_image_features(
+                                pixel_values=single_inputs.get('pixel_values')
+                            )
+                            
+                            text_embeds_list.append(text_embed.cpu().numpy())
+                            image_embeds_list.append(image_embed.cpu().numpy())
+                            
+                    except Exception as single_e:
+                        print(f"[OOM] Errore nel processamento singolo elemento {i}: {single_e}")
+                        # Aggiungi embedding nullo in caso di errore
+                        text_embeds_list.append(np.zeros((1, 512)))
+                        image_embeds_list.append(np.zeros((1, 512)))
+                
+                # Combina i risultati
+                text_embeds = np.vstack(text_embeds_list)
+                image_embeds = np.vstack(image_embeds_list)
+                
+                return text_embeds, image_embeds
+                
+    except Exception as e:
+        print(f"[ERROR] Errore generale nell'embedding batch: {e}")
+        return None, None
 
 # ========== DELTA LAKE MERGE UTILITY ==========
 def merge_embeddings(df_out, path):
@@ -150,6 +244,8 @@ def merge_embeddings(df_out, path):
 while True:
     print("TRANSFORMERS_CACHE set to:", os.environ.get("TRANSFORMERS_CACHE"))
     print(f"\n[INFO] Avvio ciclo estrazione embedding - {datetime.now().isoformat()}")
+    print(f"[INFO] Configurazione: LIMIT_RECORDS={LIMIT_RECORDS}, BATCH_SIZE={BATCH_SIZE}, DEVICE={device}")
+    
     last_guid = read_last_processed_guid()
     df_new = get_new_records(last_guid)
 
@@ -163,8 +259,17 @@ while True:
     print(f"[INFO] Record da processare: {len(pandas_df)}")
 
     records = []
+    # Buffer per accumulo batch
+    batch_texts = []
+    batch_images = []
+    batch_guids = []
+    batch_rows = []
+    
+    # Mantieni loop for row in pandas_df.iterrows() come richiesto
     for idx, row in pandas_df.iterrows():
         guid = row["guid"]
+        print(f"[BATCH] Processando record {idx+1}/{len(pandas_df)}: {guid}")
+        
         # 1. Prepara il testo concatenato nel giusto ordine
         text = preprocess_text(row)
         
@@ -194,32 +299,96 @@ while True:
                     image_url = None
             except Exception:
                 image_url = None
+        
         image = fetch_image(image_url) if image_url else None
 
-        if not image:
+        # Accumula i record in batch da BATCH_SIZE per l'embedding
+        if image:  # Solo se abbiamo un'immagine valida
+            batch_texts.append(text_input)
+            batch_images.append(image)
+            batch_guids.append(guid)
+            batch_rows.append(row)
+            print(f"[BATCH] Aggiunto al batch: {len(batch_texts)}/{BATCH_SIZE}")
+        else:
+            # Processa immediatamente se non c'è immagine
+            print(f"[BATCH] Nessuna immagine per {guid}, processamento immediato")
             embedding_status = "NO_IMAGE"
             emb_text = clip_model.get_text_features(**clip_processor(
                 text=text_input, return_tensors="pt", padding=True)
             ).detach().cpu().numpy()[0].tolist()
             emb_image = None
-        else:
-            try:
-                emb_text, emb_image = get_embeddings([text_input], [image])
-                embedding_status = "OK"
-                emb_text = emb_text[0].tolist()
-                emb_image = emb_image[0].tolist()
-            except Exception as e:
-                print(f"[ERROR] Errore nell'embedding CLIP per guid {guid}: {e}")
-                embedding_status = "FAILED"
-                emb_text = None
-                emb_image = None
+            
+            records.append({
+                "id_object": guid,
+                "embedding_text": emb_text,
+                "embedding_image": emb_image,
+                "embedding_status": embedding_status,
+            })
 
-        records.append({
-            "id_object": guid,
-            "embedding_text": emb_text,
-            "embedding_image": emb_image,
-            "embedding_status": embedding_status,
-        })
+        # Processa batch quando raggiunge BATCH_SIZE
+        if len(batch_texts) >= BATCH_SIZE:
+            print(f"[BATCH] Processando batch di {len(batch_texts)} elementi...")
+            
+            # Manda tutto in un colpo a CLIP
+            emb_texts, emb_images = get_embeddings_batch(batch_texts, batch_images)
+            
+            if emb_texts is not None and emb_images is not None:
+                # Salva embedding_text, embedding_image in records[]
+                for i, batch_guid in enumerate(batch_guids):
+                    records.append({
+                        "id_object": batch_guid,
+                        "embedding_text": emb_texts[i].tolist(),
+                        "embedding_image": emb_images[i].tolist(),
+                        "embedding_status": "OK",
+                    })
+                    print(f"[BATCH] Salvato embedding per {batch_guid}")
+            else:
+                # Fallback in caso di errore totale del batch
+                print(f"[BATCH] Errore nel batch, impostando status FAILED per tutti gli elementi")
+                for batch_guid in batch_guids:
+                    records.append({
+                        "id_object": batch_guid,
+                        "embedding_text": None,
+                        "embedding_image": None,
+                        "embedding_status": "FAILED",
+                    })
+            
+            # Resetta i buffer
+            batch_texts = []
+            batch_images = []
+            batch_guids = []
+            batch_rows = []
+            print(f"[BATCH] Buffer resettato")
+
+    # In coda: batch rimanente - elabora gli eventuali ultimi n < BATCH_SIZE elementi rimasti nel buffer
+    if len(batch_texts) > 0:
+        print(f"[BATCH] Processando batch rimanente di {len(batch_texts)} elementi...")
+        
+        # Manda tutto in un colpo a CLIP
+        emb_texts, emb_images = get_embeddings_batch(batch_texts, batch_images)
+        
+        if emb_texts is not None and emb_images is not None:
+            # Salva embedding_text, embedding_image in records[]
+            for i, batch_guid in enumerate(batch_guids):
+                records.append({
+                    "id_object": batch_guid,
+                    "embedding_text": emb_texts[i].tolist(),
+                    "embedding_image": emb_images[i].tolist(),
+                    "embedding_status": "OK",
+                })
+                print(f"[BATCH] Salvato embedding finale per {batch_guid}")
+        else:
+            # Fallback in caso di errore totale del batch
+            print(f"[BATCH] Errore nel batch finale, impostando status FAILED per tutti gli elementi")
+            for batch_guid in batch_guids:
+                records.append({
+                    "id_object": batch_guid,
+                    "embedding_text": None,
+                    "embedding_image": None,
+                    "embedding_status": "FAILED",
+                })
+
+    print(f"[INFO] Completato processamento di {len(records)} record")
 
     output_schema = StructType([
         StructField("id_object", StringType(), False),
@@ -233,11 +402,14 @@ while True:
     if df_out.count() > 0:
         try:
             merge_embeddings(df_out, EMBEDDING_PATH)
+            print(f"[DELTA] Salvati {df_out.count()} record in DeltaTable")
         except Exception as e:
             print(f"[ERROR] Scrittura DeltaTable con merge fallita: {e}")
 
         last_guid_processed = pandas_df["guid"].iloc[-1]
         write_last_processed_guid(last_guid_processed)
+        print(f"[STATE] Ultimo GUID processato: {last_guid_processed}")
 
     print("[INFO] Embedding extraction batch completato. Attendo...")
+    print(f"[INFO] Prossimo ciclo tra {SLEEP_SECONDS} secondi...")
     time.sleep(SLEEP_SECONDS)

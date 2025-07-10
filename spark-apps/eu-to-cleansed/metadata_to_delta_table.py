@@ -30,7 +30,7 @@ print(f"📊 Numero record letti: {df.count()}")
 # ---------------- Data cleansing ----------------
 df_clean = df \
     .filter(col("guid").isNotNull()) \
-    .filter(col("IsShownBy").isNotNull()) \
+    .filter(col("isShownBy").isNotNull()) \
     .dropDuplicates(["guid"])
 print(f"🧹 Numero record dopo cleaning: {df_clean.count()}")
 print("💾 Scrittura in formato Delta su MinIO...")

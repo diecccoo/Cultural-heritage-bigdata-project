@@ -23,17 +23,22 @@ delta_path = "s3a://heritage/cleansed/embeddings/"
 # ---------------------------------------------
 # Lettura dei dati e filtro dei record validi
 # ---------------------------------------------
-df = spark.read.format("delta").load(delta_path)
+df_light = spark.read.format("delta").load(delta_path).select("id_object", "embedding_status")
 
-filtered_df = df.filter(
-    (col("embedding_status") == "OK") &
-    (col("embedding_image").isNotNull())
-)
+# Step 2: filtra solo i record con status "OK"
+valid_ids = df_light.filter(col("embedding_status") == "OK")
+
+# Step 3: ricarica l’intero dataset
+df_full = spark.read.format("delta") \
+    .load("s3a://heritage/cleansed/embeddings")
+
+# Step 4: filtra solo i record validi via join
+df_embeddings = df_full.join(valid_ids.select("id_object"), on="id_object", how="inner")
 
 # ---------------------------------------------
 # Selezione colonne da esportare
 # ---------------------------------------------
-export_df = filtered_df.select("id_object", "embedding_image", "embedding_text")
+export_df = df_embeddings.select("id_object", "embedding_image", "embedding_text")
 
 # ---------------------------------------------
 # Scrittura del file Parquet in volume condiviso

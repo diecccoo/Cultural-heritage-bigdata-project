@@ -1,4 +1,5 @@
 FROM bitnami/spark:3.5.5
+ENV HOME=/opt/bitnami/spark
 
 # Usa root per installazioni
 USER root

@@ -283,6 +283,7 @@ services:
     networks:
       - heritage-net
 
+
   embeddings-extractor:
     build:
       context: .
@@ -292,10 +293,11 @@ services:
     depends_on:
       - spark-master
       - minio
-    environment:
-      - TRANSFORMERS_CACHE=s3a://heritage/cache/hf-models
+    volumes:
+      - hf-cache:/root/.cache/huggingface/transformers
     networks:
       - heritage-net
+
 
   embeddings-exporter:
     build:
@@ -396,6 +398,7 @@ volumes:
   postgres-data:
   pgadmin-data:
   deduplication-data:
+  hf-cache:
 
 
 
