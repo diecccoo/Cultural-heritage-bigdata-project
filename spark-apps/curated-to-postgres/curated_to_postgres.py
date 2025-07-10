@@ -31,16 +31,17 @@ try:
 
     # Seleziona e mappa i campi desiderati (immagine e link convertiti da array a stringa)
     df_mapped = df.select(
-        col("guid"),
-        col("user_id"),
-        col("tags"),
-        col("comment"),
-        to_timestamp(col("timestamp")).alias("ugc_timestamp"),
-        col("location"),
-        col("description"),
-        col("image_url"),
-        col("title")
-    )
+    col("guid").alias("id_object"),
+    col("user_id"),
+    col("tags"),
+    col("comment"),
+    to_timestamp(col("timestamp")).alias("annotation_timestamp"),
+    col("description"),
+    col("image_url"),
+    col("title"),
+    col("creator")
+)
+
 
     log("Schema pronto per PostgreSQL")
     df_mapped.printSchema()
