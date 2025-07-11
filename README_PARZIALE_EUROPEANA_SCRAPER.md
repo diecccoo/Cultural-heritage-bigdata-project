@@ -19,27 +19,26 @@ The entire architecture is containerized with Docker Compose, ensuring modular d
 
 ### `europeana_ingest_batch.py` – Europeana Metadata Producer
 
-This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each provider, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page. The use of `cursor` allows scrolling within a single session.
+This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each provider, that we previously decided, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page. The use of `cursor` allows scrolling within a single session.
 
-#### ⚙️ Key Features
+#### Key Features
 
-- Simulates a museum uploading its own metadata
+- Simulates a museum uploading its own metadata 
 - Publishes records to Kafka topic `europeana_metadata`
 - Avoids duplicates via local file `downloaded_guids.txt`
-- Skips image download to avoid overloading the pipeline
+- Skips image download to avoid overloading the pipeline, but saves its url in the metadata
 - Uses `scheduler.py` to periodically execute the script
 
-#### ⚠️ Known Limitations
+#### Known Limitations
 
 Due to the design of the Europeana API:
-- The `cursor` mechanism **only works in continuous sessions**; we cannot resume precisely where we left off between runs.
-- `start` values above 1000 are **not supported**, which limits pagination without cursor.
+- The `cursor` mechanism **only works in continuous sessions**; we cannot resume precisely where we left off between different API calls.
+- `start` values above 1000 are **not supported** by the Europeana API, which limits pagination without cursor.
 - We cannot guarantee full coverage of a provider unless `PAGES_PER_HOUR` is sufficiently large.
-- There is no built-in error recovery between script executions.
 
 These constraints are acceptable in our architecture, as the script is intended to **simulate ingestion**, not serve as a complete harvesting solution.
 
-#### 🧾 Sample Metadata Message
+#### Sample Metadata Message
 
 ```json
 {
@@ -62,18 +61,17 @@ These constraints are acceptable in our architecture, as the script is intended 
 ```
 ### `annotation_producer.py` – User Annotation Producer
 
-This script generates fake user annotations on top of existing objects. It retrieves object IDs from the Delta table in MinIO (`heritage/cleansed/europeana`) and creates synthetic tags, comments, timestamps, and optional locations.
+This script generates user annotations and comments on top of existing objects. It retrieves object IDs from the Delta table in MinIO (`heritage/cleansed/europeana`) and creates synthetic tags, comments, timestamps, and optional locations.
 
 The messages are written to the Kafka topic `user_annotations`.
 
-#### ⚙️ Key Features
+#### Key Features
 
 - Produces realistic tags and natural language comments
 - Simulates one annotation every few seconds
 - Runs in a continuous loop using `time.sleep()`
-- Does not require external scheduling
 
-#### 🧾 Sample Annotation Message
+#### Sample Annotation Message
 
 ```json
 {
@@ -86,32 +84,28 @@ The messages are written to the Kafka topic `user_annotations`.
 }
 ```
 
-## 🧪 How Ingestion Works
+## How Ingestion Works
 
 1. Both producers publish messages to Kafka topics:
    - `europeana_metadata`
    - `user_annotations`
 
-2. These messages are **not written directly to MinIO**.
+2. These messages are not written directly to **MinIO**.
 
 3. Spark Structured Streaming consumers read from Kafka and write:
    - Raw Europeana metadata to `s3a://heritage/raw/metadata/europeana_metadata/`
    - Raw annotations to `s3a://heritage/raw/metadata/user_generated_content/`
 
-Each record is saved in **append-only JSON format**, partitioned by date (`dt=YYYY-MM-DD`) and enriched with:
-- `ingestion_time`: the timestamp when Spark received the message
-- `source`: identifies the source, e.g. `kafka:europeana_metadata`
-
-This ensures:
+In this way, we ensure:
 - Decoupled, scalable ingestion
 - Fault-tolerant persistence
 - Independent evolution of producer and consumer logic
 
-> 💡 The ingestion layer reflects a real-world scenario where data producers and consumers are independent and asynchronously coordinated.
+> The ingestion layer reflects a real-world scenario where data producers and consumers are independent and asynchronously coordinated.
 
 ---
 
-## 🐳 Containerization
+## Containerization
 
 While both producers can be run manually via Python, they are designed to be used within a **Docker Compose** setup. In particular:
 
@@ -124,7 +118,7 @@ The system assumes the presence of:
 
 ---
 
-## 📌 Notes & Future Improvements
+## Notes & Future Improvements
 
 - Europeana scraping is purposefully lightweight and avoids downloading images. All image references are stored as URLs (`image_url`).
 - The current architecture assumes append-only, immutable ingestion in the RAW layer.
@@ -135,18 +129,20 @@ The system assumes the presence of:
 
 ---
 
-## 📂 File Structure
+## File Structure
 
 ```text
 kafka/
 ├── europeana-ingest/
 │   ├── europeana_ingest_batch.py
-│   ├── downloaded_guids.txt
+│   ├── Dockerfile
 │   └── state/
+│       ├── downloaded_guids.txt
 │       └── europeana_offset.json
 │
-├── annotation-simulator/
-│   └── annotation_producer.py
+├── annotation-producer/
+│   ├── annotation_producer.py
+│   └── Dockerfile
 │
 ├── scheduler.py
 ├── requirements.txt
