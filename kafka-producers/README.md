@@ -1,4 +1,4 @@
-# Kafka Producers – Europeana Metadata & User Annotations
+# Kafka Producers for Simulated Ingestion of Metadata and Users Annotations
 
 This directory contains two Kafka producers responsible for simulating data ingestion in a scalable big data system designed for museums, libraries, and heritage sites.
 
@@ -19,7 +19,7 @@ The entire architecture is containerized with Docker Compose, ensuring modular d
 
 ### `europeana_ingest_batch.py` – Europeana Metadata Producer
 
-This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each provider, that we previously decided, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page. The use of `cursor` allows scrolling within a single session.
+This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each pre-defined provider, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page. The use of `cursor` allows scrolling within a single session.
 
 #### Key Features
 
@@ -125,26 +125,26 @@ The system assumes the presence of:
 - In the future, we could:
   - Enable full provider traversal by dynamically chaining scroll sessions
   - Implement retry mechanisms for failed provider calls
-  - Add image download as a separate batch process
+  - Add image download as a separate batch process, to keep track of everything in the raw layer
 
 ---
 
 ## File Structure
 
 ```text
-kafka/
-├── europeana-ingest/
-│   ├── europeana_ingest_batch.py
-│   ├── Dockerfile
-│   └── state/
-│       ├── downloaded_guids.txt
-│       └── europeana_offset.json
-│
+kafka-producers/
 ├── annotation-producer/
-│   ├── annotation_producer.py
-│   └── Dockerfile
+│   ├── annotation_producer.py       # Simulates user-generated annotations on cultural objects
+│   └── Dockerfile                   # Container for running the annotation producer
 │
-├── scheduler.py
-├── requirements.txt
-└── README.md   
+├── europeana-ingestion/
+│   ├── europeana_ingest_batch.py    # Fetches metadata from Europeana API and sends to Kafka
+│   ├── Dockerfile                   # Container for the Europeana producer and scheduler
+│   ├── scheduler.py                 # Periodically runs the Europeana ingestion script
+│   ├── requirements.txt             # Python dependencies for europeana-ingestion
+│   └── state/
+│       ├── downloaded_guids.txt    # Tracks which GUIDs have already been ingested
+│       └── europeana_offset.json   # Stores current scroll state per provider
+│
+└── README.md                        # This documentation file 
 ```
