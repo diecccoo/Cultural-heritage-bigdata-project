@@ -45,7 +45,6 @@ def get_pending_points(limit: int = 1000, offset: Optional[str] = None) -> tuple
         limit=1000,
         with_payload=True,
         with_vectors=True
-        # vectors=["embedding_image"]
     )
     pending_points = results
 
@@ -72,7 +71,7 @@ def search_similar_validated_points(image_embedding: List[float], limit: int = M
         # e specificare quale vettore usare tramite il parametro vector
         search_results = client.search(
             collection_name=COLLECTION_NAME,
-            query_vector=NamedVector(name="embedding_image", vector=image_embedding),
+            query_vector=NamedVector(name="image", vector=image_embedding),
             query_filter=filter_condition,
             limit=limit,
             with_payload=True,
@@ -135,7 +134,7 @@ def search_similar_validated_points_fallback(image_embedding: List[float], limit
             if hasattr(point, 'vector') and point.vector:
                 # Gestisci vettori multipli
                 if isinstance(point.vector, dict):
-                    target_vector = point.vector.get('embedding_image')
+                    target_vector = point.vector.get('image')
                 else:
                     target_vector = point.vector
                 
@@ -229,12 +228,12 @@ def deduplicate_batch(points: List[Any]) -> int:
             
             # Gestisci vettori multipli
             if isinstance(point.vector, dict):
-                image_embedding = point.vector.get('embedding_image')
+                image_embedding = point.vector.get('image')
             else:
                 image_embedding = point.vector
             
             if not image_embedding:
-                print(f"[SKIP] Punto {point_id} senza embedding_image")
+                print(f"[SKIP] Punto {point_id} senza embeddings dell'image")
                 continue
             
             # Cerca punti simili tra quelli validated

@@ -66,8 +66,8 @@ COLLECTION_NAME = "heritage_embeddings"
 qdrant.recreate_collection(
     collection_name=COLLECTION_NAME,
     vectors_config={
-        "embedding_image": VectorParams(size=512, distance=Distance.COSINE),
-        "embedding_text": VectorParams(size=512, distance=Distance.COSINE),
+        "image": VectorParams(size=512, distance=Distance.COSINE),         # solo immagine → per deduplicazione
+        "combined": VectorParams(size=1024, distance=Distance.COSINE)      # immagine + testo → per raccomandazioni
     }
 )
 # Aggiungi payload index sul campo 'status' per filtrare punti pending/validated
@@ -421,13 +421,19 @@ while True:
                     "id_object": rec["id_object"],
                     "status": "pending"
                 }
+                embedding_image = rec["embedding_image"]
+                embedding_text = rec["embedding_text"]
+
                 points.append(PointStruct(
                     id=point_id,
                     vector={
-                        "embedding_image": rec["embedding_image"],
-                        "embedding_text": rec["embedding_text"]
+                        "image": embedding_image,
+                        "combined": embedding_image + embedding_text  # concatenazione
                     },
-                    payload=payload
+                    payload={
+                        **payload,
+                        "embedding_text": embedding_text  # facoltativo: utile se vuoi salvarlo nel payload
+                    }
                 ))
             else:
                 print(f"[SKIP] Skipping {rec['id_object']} with status {rec['embedding_status']}")
