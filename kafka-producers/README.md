@@ -1,4 +1,4 @@
-# Kafka Producers for Simulated Ingestion of Metadata and Users Annotations
+# Kafka producers for simulated ingestion
 
 This directory contains two Kafka producers responsible for simulating data ingestion in a scalable big data system designed for museums, libraries, and heritage sites.
 
@@ -11,15 +11,13 @@ Our system is designed with the scenario of a **museum** or **heritage instituti
 - The **Europeana producer** fetches metadata from the [Europeana API](https://pro.europeana.eu/page/apis), mimicking ingestion from external cultural providers.
 - The **Annotation producer** simulates user-generated content (for example tags and comments) on existing objects.
 
-The entire architecture is containerized with Docker Compose, ensuring modular deployment of Kafka, Spark, MinIO, and all ingestion/processing components.
-
 ---
 
 ## Producers Overview
 
 ### `europeana_ingest_batch.py` – Europeana Metadata Producer
 
-This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each pre-defined provider, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page. The use of `cursor` allows scrolling within a single session.
+This script fetches metadata from the Europeana API using a fixed list of provider IDs. For each pre-defined provider, it retrieves a number of pages (configurable via `PAGES_PER_HOUR`) with 100 records per page (configurable via `ROWS_PER_PAGE`). The use of `cursor` allows scrolling within a single session.
 
 #### Key Features
 
@@ -101,8 +99,6 @@ In this way, we ensure:
 - Fault-tolerant persistence
 - Independent evolution of producer and consumer logic
 
-> The ingestion layer reflects a real-world scenario where data producers and consumers are independent and asynchronously coordinated.
-
 ---
 
 ## Containerization
@@ -123,8 +119,7 @@ The system assumes the presence of:
 - Europeana scraping is purposefully lightweight and avoids downloading images. All image references are stored as URLs (`image_url`).
 - The current architecture assumes append-only, immutable ingestion in the RAW layer.
 - In the future, we could:
-  - Enable full provider traversal by dynamically chaining scroll sessions
-  - Implement retry mechanisms for failed provider calls
+  - Enable full provider traversal by dynamically chaining scroll sessions, to get more metadata
   - Add image download as a separate batch process, to keep track of everything in the raw layer
 
 ---
