@@ -119,8 +119,8 @@ services:
       - heritage-net   
 
 
-  europeana-scraper:
-    container_name: europeana-scraper
+  europeana-ingestion:
+    container_name: europeana-ingestion
     build: ./kafka-producers/europeana-ingestion
     depends_on:
       - kafka
