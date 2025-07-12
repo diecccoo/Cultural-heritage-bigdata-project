@@ -6,18 +6,12 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
     volumes:
       - zookeeper-data:/var/lib/zookeeper/data
-      # - zookeeper-data:/bitnami/zookeeper
     ports:
     - "2181:2181"
     restart: always
     networks:
       - heritage-net
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: '1.0' # 1 CPU core
-    #       memory: 1G  # 1 Gigabyte di RAM
-  # Kafka usa Zookeeper per gestire broker e coordinare i cluster.
+
 
   kafka:
   #  broker 1 
@@ -38,69 +32,19 @@ services:
     networks:
       - heritage-net
 
-    
-
-  
-  # kafka2:
-  #   image: confluentinc/cp-kafka:7.6.0
-  #   container_name: kafka2
-  #   hostname: kafka2
-  #   depends_on:
-  #     - zookeeper
-  #   environment:
-  #     KAFKA_BROKER_ID: 2
-  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093
-  #   ports:
-  #     - "9093:9093"
-  #   restart: always
-  #   networks:
-  #   - heritage-net
-  #   volumes:
-  #     - kafka2-data:/var/lib/kafka/data
-  #     - ./config/kafka/server-2.properties:/etc/kafka/server.properties
-
-  # kafka3:
-  #   image: confluentinc/cp-kafka:7.5.3
-  #   container_name: kafka3
-  #   hostname: kafka3
-  #   depends_on:
-  #     - zookeeper
-  #   environment:
-  #     KAFKA_BROKER_ID: 3
-  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094
-  #   ports:
-  #     - "9094:9094"
-  #   networks:
-  #     - heritage-net
-  #   restart: always
-  #   volumes:
-  #     - kafka3-data:/var/lib/kafka/data
-  #     - ./config/kafka/server-3.properties:/etc/kafka/server.properties
- 
-  # kafka-client:
-  #   image: confluentinc/cp-kafka:7.5.3
-  #   container_name: kafka-client
-  #   depends_on:
-  #     - kafka
-  #   entrypoint: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
-  #   networks:
-  #     - heritage-net
-  #  Non serve nessuna porta esposta: serve solo per comandi da terminale
-  #  container kafka-client per poter usare i comandi Kafka CLI come kafka-topics.sh
-
-  # kafka-tools:
-  #   image: bitnami/kafka:latest
-  #   container_name: kafka-tools
-  #   entrypoint: ["sleep", "infinity"]
-  #   depends_on:
-  #     - kafka
-  #   networks:
-  #     - heritage-net
-  # Un container leggero per interagire con Kafka da linea di comando
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8081:8080"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092 
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+    networks:
+      - heritage-net
 
   kafka-init:
     container_name: kafka-init
@@ -121,24 +65,6 @@ services:
     networks:
       - heritage-net
   # Questo container esegue uno script per creare i topic iniziali in Kafka
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    ports:
-      - "8081:8080"
-    depends_on:
-      - kafka
-      # - kafka2
-      # - kafka3
-    environment:
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092 #,kafka2:9093 #,kafka3:9094 <--- con kafka3
-      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
-    networks:
-      - heritage-net
-  # GUI (interfaccia grafica web)  per monitorare topic, consumer group, messaggi, ecc
-  # Vai su http://localhost:8081 per usare la GUI.
 
   minio:
     container_name: minio
@@ -174,9 +100,7 @@ services:
     image: bitnami/spark:latest
     networks:
       - heritage-net
-#  7077	usata dai worker e dai spark-submit per comunicare col master
-#  8080	usata dal browser per vedere la Spark Web UI (monitoraggio job, workers, ecc.)
-    
+
 
   spark-worker:
     container_name: spark-worker
@@ -284,6 +208,17 @@ services:
       - heritage-net
 
 
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - heritage-net
+
+
   embeddings-extractor:
     build:
       context: .
@@ -293,50 +228,62 @@ services:
     depends_on:
       - spark-master
       - minio
+      - qdrant
     volumes:
       - hf-cache:/root/.cache/huggingface/transformers
     networks:
       - heritage-net
 
-
-  embeddings-exporter:
+  qdrant-deduplicator:
     build:
       context: .
-      dockerfile: ./spark-apps/embeddings-exporter/Dockerfile
-    container_name: embeddings-exporter
+      dockerfile: ./qdrant-deduplicator/Dockerfile
+    container_name: qdrant-deduplicator
+    restart: always
     depends_on:
-      - spark-master
-      - minio
+      - qdrant
     networks:
       - heritage-net
-    volumes:
-      - deduplication-data:/shared-data
-
-  faiss:
-    build:
-      context: .
-      dockerfile: ./faiss/Dockerfile
-    container_name: faiss
-    depends_on:
-      - embeddings-exporter
-    networks:
-      - heritage-net
-    volumes:
-      - deduplication-data:/shared-data
 
 
-  deduplicator-to-cleansed:
-    build:
-      context: .
-      dockerfile: ./spark-apps/deduplicator-to-cleansed/Dockerfile
-    container_name: deduplicator-to-cleansed
-    depends_on:
-      - spark-master
-      - minio
-    networks:
-      - heritage-net
-    volumes:
-      - deduplication-data:/shared-data
+  # embeddings-exporter:
+  #   build:
+  #     context: .
+  #     dockerfile: ./spark-apps/embeddings-exporter/Dockerfile
+  #   container_name: embeddings-exporter
+  #   depends_on:
+  #     - spark-master
+  #     - minio
+  #   networks:
+  #     - heritage-net
+  #   volumes:
+  #     - deduplication-data:/shared-data
+
+  # faiss:
+  #   build:
+  #     context: .
+  #     dockerfile: ./faiss/Dockerfile
+  #   container_name: faiss
+  #   depends_on:
+  #     - embeddings-exporter
+  #   networks:
+  #     - heritage-net
+  #   volumes:
+  # #     - deduplication-data:/shared-data
+
+
+  # deduplicator-to-cleansed:
+  #   build:
+  #     context: .
+  #     dockerfile: ./spark-apps/deduplicator-to-cleansed/Dockerfile
+  #   container_name: deduplicator-to-cleansed
+  #   depends_on:
+  #     - spark-master
+  #     - minio
+  #   networks:
+  #     - heritage-net
+  #   volumes:
+  #     - deduplication-data:/shared-data
 
 
   postgres:
@@ -397,67 +344,6 @@ volumes:
   spark-eutm:
   postgres-data:
   pgadmin-data:
-  deduplication-data:
+  # deduplication-data:
   hf-cache:
-
-
-
-
-# per il futuro:
-
-  # streamlit:
-  #   container_name: streamlit
-  #   build: ./streamlit
-  #   ports:
-  #     - "8501:8501"
-  #   volumes:
-  #     - ./streamlit/app:/app
-  #   depends_on:
-  #     - redis
-  #     - postgres
-  #     - minio
-  #     - spark-master
-
-  # redis:
-  #   container_name: redis
-  #   image: redis:7
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
-  #     - redis-data:/data 
-  #   command: redis-server /usr/local/etc/redis/redis.conf
-
-  # postgres:
-  #   container_name: postgres
-  #   image: postgres:14
-  #   environment:
-  #     POSTGRES_USER: user
-  #     POSTGRES_PASSWORD: pass
-  #     POSTGRES_DB: heritage
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #     - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-
-
-
-
-  # non serve piu 
-  # mqtt-kafka-bridge:
-  #   container_name: mqtt-kafka-bridge
-  #   build: ./mqtt-kafka-bridge
-  #   depends_on:
-  #     - mqtt
-  #     - kafka
-  #   restart: always
-
-  # mqtt:
-  #   container_name: mqtt
-  #   image: eclipse-mosquitto
-  #   ports:
-  #     - "1883:1883"
-  #     - "9091:9001"
-  #   volumes:
-  #     - ./config/mqtt:/mosquitto/config
+  qdrant-data:

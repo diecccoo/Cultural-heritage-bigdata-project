@@ -3,22 +3,11 @@ FROM bitnami/spark:3.5.5
 USER root
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    pyspark==3.5.5 \
-    delta-spark==3.3.1 \
-    torch \
-    torchvision \
-    transformers \
-    pillow \
-    requests \
-    boto3 \
-    pandas \
-    numpy
+COPY spark-apps/embeddings-extractor/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
 ENV HF_HOME=/root/.cache/huggingface
-
-
 
 COPY spark-apps/embeddings-extractor/ .
 

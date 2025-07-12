@@ -15,12 +15,6 @@ from pyspark.sql.functions import col
 from transformers import CLIPProcessor, CLIPModel
 import ast
 
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import VectorParams, Distance, PointStruct
-from qdrant_client.http.models import PayloadSchemaType
-
-import hashlib
-
 # ========== CONFIGURAZIONE ==========
 MINIO_ENDPOINT = "http://minio:9000"
 MINIO_ACCESS_KEY = "minio"
@@ -56,40 +50,7 @@ print(f"[DEVICE] Utilizzando dispositivo: {device}")
 clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)
 clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
-
-# ========== INIZIALIZZA QDRANT ==========
-# Configura Qdrant client (lo chiamiamo una volta sola)
-qdrant = QdrantClient(host="qdrant", port=6333)
-
-# Crea la collection se non esiste (solo all’avvio)
-COLLECTION_NAME = "heritage_embeddings"
-qdrant.recreate_collection(
-    collection_name=COLLECTION_NAME,
-    vectors_config={
-        "embedding_image": VectorParams(size=512, distance=Distance.COSINE),
-        "embedding_text": VectorParams(size=512, distance=Distance.COSINE),
-    }
-)
-# Aggiungi payload index sul campo 'status' per filtrare punti pending/validated
-try:
-    qdrant.create_payload_index(
-        collection_name=COLLECTION_NAME,
-        field_name="status",
-        field_schema=PayloadSchemaType.Keyword
-    )
-    print("[QDRANT] Creato payload index sul campo 'status'")
-except Exception as e:
-    print(f"[QDRANT] Errore nella creazione payload index (forse esiste già): {e}")
-
-
-
 # ========== FUNZIONI DI UTILITY ==========
-def sanitize_id(guid):
-    """
-    Converte il GUID (che può essere un URL lungo) in una stringa compatibile con Qdrant
-    """
-    return hashlib.md5(guid.encode()).hexdigest()
-
 
 def read_last_processed_guid():
     try:
@@ -259,6 +220,25 @@ def get_embeddings_batch(texts, images):
         print(f"[ERROR] Errore generale nell'embedding batch: {e}")
         return None, None
 
+# ========== DELTA LAKE MERGE UTILITY ==========
+def merge_embeddings(df_out, path):
+    from delta.tables import DeltaTable
+
+    # Crea la tabella Delta se non esiste
+    if not DeltaTable.isDeltaTable(spark, path):
+        df_out.write.format("delta").mode("overwrite").save(path)
+        print("[DELTA] Creata nuova DeltaTable embeddings (overwrite primo batch).")
+        return
+
+    deltaTable = DeltaTable.forPath(spark, path)
+    deltaTable.alias("target").merge(
+        df_out.alias("source"),
+        "target.id_object = source.id_object"
+    ).whenMatchedUpdateAll() \
+     .whenNotMatchedInsertAll() \
+     .execute()
+    print(f"[DELTA] Merge completato: upsert su id_object.")
+
 # ========== MAIN LOOP ==========
 
 while True:
@@ -410,41 +390,26 @@ while True:
 
     print(f"[INFO] Completato processamento di {len(records)} record")
 
-    if len(records) > 0:
-        print(f"[QDRANT] Inizio upsert di {len(records)} record in Qdrant...")
+    output_schema = StructType([
+        StructField("id_object", StringType(), False),
+        StructField("embedding_text", ArrayType(FloatType()), True),
+        StructField("embedding_image", ArrayType(FloatType()), True),
+        StructField("embedding_status", StringType(), False),
+    ])
+    df_out = spark.createDataFrame(pd.DataFrame(records), schema=output_schema)
 
-        points = []
-        for rec in records:
-            if rec["embedding_status"] == "OK":
-                point_id = sanitize_id(rec["id_object"])
-                payload = {
-                    "id_object": rec["id_object"],
-                    "status": "pending"
-                }
-                points.append(PointStruct(
-                    id=point_id,
-                    vector={
-                        "embedding_image": rec["embedding_image"],
-                        "embedding_text": rec["embedding_text"]
-                    },
-                    payload=payload
-                ))
-            else:
-                print(f"[SKIP] Skipping {rec['id_object']} with status {rec['embedding_status']}")
-
-
+    # ====== MERGE/UPSERT IN DELTATABLE ======
+    if df_out.count() > 0:
         try:
-            qdrant.upsert(collection_name=COLLECTION_NAME, points=points)
-            print(f"[QDRANT] Completato upsert di {len(points)} embeddings")
-
-            last_guid_processed = pandas_df["guid"].iloc[-1]
-            write_last_processed_guid(last_guid_processed)
-            print(f"[STATE] Ultimo GUID processato: {last_guid_processed}")
-
+            merge_embeddings(df_out, EMBEDDING_PATH)
+            print(f"[DELTA] Salvati {df_out.count()} record in DeltaTable")
         except Exception as e:
-            print(f"[QDRANT] Errore durante upsert in Qdrant: {e}")
+            print(f"[ERROR] Scrittura DeltaTable con merge fallita: {e}")
 
+        last_guid_processed = pandas_df["guid"].iloc[-1]
+        write_last_processed_guid(last_guid_processed)
+        print(f"[STATE] Ultimo GUID processato: {last_guid_processed}")
 
-        print("[INFO] Embedding extraction batch completato. Attendo...")
-        print(f"[INFO] Prossimo ciclo tra {SLEEP_SECONDS} secondi...")
-        time.sleep(SLEEP_SECONDS)
+    print("[INFO] Embedding extraction batch completato. Attendo...")
+    print(f"[INFO] Prossimo ciclo tra {SLEEP_SECONDS} secondi...")
+    time.sleep(SLEEP_SECONDS)

@@ -1,0 +1,22 @@
+# ======== PySpark e Delta Lake ========
+pyspark==3.5.5
+delta-spark==3.3.1
+
+# ======== Deep Learning (CLIP) ========
+torch          # PyTorch core
+torchvision    # Per il supporto immagini
+transformers   # CLIP e altri modelli HuggingFace
+
+# ======== Utility scientifiche ========
+pillow         # Per apertura immagini
+pandas
+numpy
+
+# ======== MinIO / S3 Supporto ========
+boto3          # Per scrivere/leggere file da MinIO via S3 API
+
+# ======== HTTP e parsing ========
+requests       # Per scaricare immagini da URL
+
+# ======== Qdrant vector DB client ========
+qdrant-client  # Per inserire embeddings in Qdrant
