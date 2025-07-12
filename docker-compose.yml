@@ -32,6 +32,7 @@ services:
     networks:
       - heritage-net
 
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -45,6 +46,7 @@ services:
       - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
     networks:
       - heritage-net
+
 
   kafka-init:
     container_name: kafka-init
@@ -66,6 +68,7 @@ services:
       - heritage-net
   # Questo container esegue uno script per creare i topic iniziali in Kafka
 
+
   minio:
     container_name: minio
     image: minio/minio
@@ -81,6 +84,7 @@ services:
     networks:
       - heritage-net
 
+
   minio-init:
     container_name: minio-init
     build: ./config/minio
@@ -89,6 +93,7 @@ services:
     networks:
       - heritage-net
       
+
   spark-master:
     container_name: spark-master
     hostname: spark-master
@@ -116,7 +121,7 @@ services:
 
   europeana-scraper:
     container_name: europeana-scraper
-    build: ./europeana-scraper
+    build: ./kafka-producers/europeana-ingestion
     depends_on:
       - kafka
     restart: always
@@ -137,6 +142,7 @@ services:
         networks:
           - heritage-net
 
+
   eu-to-cleansed:
     build:
           context: .
@@ -152,11 +158,12 @@ services:
     networks:
       - heritage-net
 
+
   annotation-producer:
     container_name: annotation-producer
     build:
           context: .
-          dockerfile: ./annotation-producer/Dockerfile
+          dockerfile: ./kafka-producers/annotation-producer/Dockerfile
     depends_on:
       - kafka
       - minio
@@ -168,6 +175,7 @@ services:
       KAFKA_BROKER:          kafka:9092
     networks:
       - heritage-net
+
 
   ugc-to-raw:
     build:
@@ -194,6 +202,7 @@ services:
     restart: always
     networks:
       - heritage-net
+
 
   join-eu-ugc-curated:
     build:
@@ -233,6 +242,7 @@ services:
       - hf-cache:/root/.cache/huggingface/transformers
     networks:
       - heritage-net
+
 
   qdrant-deduplicator:
     build:
@@ -302,6 +312,7 @@ services:
     networks:
       - heritage-net
 
+
   pgadmin:
     image: dpage/pgadmin4:8.5
     container_name: pgadmin
@@ -336,6 +347,7 @@ services:
 networks:
   heritage-net:
     driver: bridge
+
 
 volumes:
   minio-data:

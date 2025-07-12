@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1 kafka-python
 # torna all'utente non-root
 USER 1001
 
-COPY annotation-producer/ .
+COPY kafka-producers/annotation-producer/ .
 
 # Avvio con spark-submit per avere a disposizione i connettori Delta e S3A
 CMD spark-submit \
