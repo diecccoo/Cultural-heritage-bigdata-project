@@ -53,7 +53,6 @@ def main():
     folders = [
         "raw/metadata/europeana_metadata/",
         "raw/metadata/user_generated_content/",
-        "raw/images/",
         "cleansed/europeana/",
         "cleansed/user_generated/",
         "curated/join_metadata/"
