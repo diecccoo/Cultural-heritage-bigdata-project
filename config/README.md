@@ -27,7 +27,7 @@ Kafka broker configuration file mounted inside the Kafka container to customize 
   Ensures that Kafka advertises a reachable hostname (`kafka`) to other containers in the Docker network. Without this, Spark and other services might fail to connect.
 
 - `auto.create.topics.enable=true`  
-  Allows Kafka to automatically create topics when a producer sends a message to a non-existing topic. Useful for prototyping, but should be disabled in production.
+  Allows Kafka to automatically create topics when a producer sends a message to a non-existing topic. 
 
 - `log.dirs=/var/lib/kafka/data`  
   Path where Kafka stores its internal message logs. This is mounted to a Docker volume for persistence.
@@ -35,7 +35,7 @@ Kafka broker configuration file mounted inside the Kafka container to customize 
 
 #### Architectural Notes: Single Broker, Single Partition
 
-In this prototype, both Kafka topics are created with:
+In this prototype, Kafka topics are created with:
 
 - **1 broker**
 - **1 partition**
@@ -68,7 +68,7 @@ For example, adding partitions to the `user_annotations` topic could allow:
 ### `minio/init_minio.py`
 Python script used to initialize the `heritage` bucket in MinIO and create the internal folder structure used by the pipeline. Specifically, it:
 
-- Connects to MinIO using `boto3` with credentials `minio` / `minio123`
+- Connects to MinIO using `boto3` with credentials user: `minio` and  password: `minio123`
 - Waits for MinIO to become reachable
 - Creates the following folders in the bucket:
     ```
@@ -84,8 +84,20 @@ Python script used to initialize the `heritage` bucket in MinIO and create the i
     - `cleansed/` stores deduplicated and cleaned Delta tables
     - `curated/` contains joined and enriched datasets ready for querying or serving
 
+#### Delta Lake Alignment
 
-This helps enforce a clear and consistent layout across all data layers.
+This folder layout reflects the principles of a **Delta Lake** architecture, which separates data into three logical layers:
+
+- `raw/` – append-only ingested data in JSON format, in this case from Kafka
+- `cleansed/` – deduplicated and structured Delta tables
+- `curated/` – finalized, enriched datasets ready to be served to applications or dashboards
+
+This layered approach improves traceability and data governance, while allowing each stage to evolve independently.
+
+By enforcing this structure at bucket initialization, we ensure that:
+- Every Spark consumer or processing job writes to the correct location
+- Data lineage is preserved from ingestion to serving
+- Future extensions (e.g., audit logs, versioning, time travel) can be added without reworking the layout
 
 ### `minio/Dockerfile`
 Custom Dockerfile used to build the container that runs `init_minio.py`. This ensures that bucket initialization logic is isolated and runs only once on startup.
@@ -115,7 +127,7 @@ config/
 │
 ├── postgres/
 │   └── init.sql                     # Initializes join_metadata table in PostgreSQL
-
+```
 ---
 
 The files in this folder define the initial state and structure of the system's core services. While they are executed inside Docker containers, this folder keeps them versioned, editable, and ready for extension if needed.
