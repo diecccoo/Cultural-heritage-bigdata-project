@@ -231,7 +231,7 @@ services:
   embeddings-extractor:
     build:
       context: .
-      dockerfile: ./spark-apps/embeddings-extractor/Dockerfile
+      dockerfile: ./ML-model/embeddings-extractor/Dockerfile
     container_name: embeddings-extractor
     restart: always
     depends_on:
@@ -247,7 +247,7 @@ services:
   qdrant-deduplicator:
     build:
       context: .
-      dockerfile: ./qdrant-deduplicator/Dockerfile
+      dockerfile: ./ML-model/qdrant-deduplicator/Dockerfile
     container_name: qdrant-deduplicator
     restart: always
     depends_on:

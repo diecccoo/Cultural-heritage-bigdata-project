@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers
 ENV HF_HOME=/root/.cache/huggingface
 
-COPY spark-apps/embeddings-extractor/ .
+COPY ML-model/embeddings-extractor/ .
 
 CMD spark-submit \
   --master local[*] \
