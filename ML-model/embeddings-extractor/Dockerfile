@@ -3,7 +3,7 @@ FROM bitnami/spark:3.5.5
 USER root
 WORKDIR /app
 
-COPY spark-apps/embeddings-extractor/requirements.txt .
+COPY ML-model/embeddings-extractor/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 ENV TRANSFORMERS_CACHE=/root/.cache/huggingface/transformers

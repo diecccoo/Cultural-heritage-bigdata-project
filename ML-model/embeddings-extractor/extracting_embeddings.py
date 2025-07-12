@@ -417,10 +417,13 @@ while True:
         for rec in records:
             if rec["embedding_status"] == "OK":
                 point_id = sanitize_id(rec["id_object"])
+
+                # Payload ridotto, senza embedding_text
                 payload = {
                     "id_object": rec["id_object"],
                     "status": "pending"
                 }
+
                 embedding_image = rec["embedding_image"]
                 embedding_text = rec["embedding_text"]
 
@@ -430,14 +433,10 @@ while True:
                         "image": embedding_image,
                         "combined": embedding_image + embedding_text  # concatenazione
                     },
-                    payload={
-                        **payload,
-                        "embedding_text": embedding_text  # facoltativo: utile se vuoi salvarlo nel payload
-                    }
+                    payload=payload  
                 ))
             else:
                 print(f"[SKIP] Skipping {rec['id_object']} with status {rec['embedding_status']}")
-
 
         try:
             qdrant.upsert(collection_name=COLLECTION_NAME, points=points)

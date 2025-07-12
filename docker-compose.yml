@@ -126,7 +126,7 @@ services:
       - kafka
     restart: always
     volumes:
-      - ./europeana-scraper/state:/app/state
+      - ./kafka-producers/europeana-ingestion/state:/app/state
     networks:
      - heritage-net
 

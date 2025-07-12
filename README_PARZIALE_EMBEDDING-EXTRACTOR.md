@@ -1,3 +1,5 @@
+-->versione vecchia. ora non mettiamo piu su minio ma lo mettiamo su qdrant! va spiegato 
+
 # Embedding Extractor (CLIP) – Heritage Project
 
 Questo container esegue l'estrazione automatica di **embedding multimodali** (testo + immagine) da metadati culturali salvati su MinIO in formato Delta Lake. È parte della pipeline di analisi per collezioni Europeana/CBL nel progetto *Cultural Heritage Big Data*.
