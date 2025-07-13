@@ -55,7 +55,6 @@ def main():
         "raw/metadata/user_generated_content/",
         "cleansed/europeana/",
         "cleansed/user_generated/",
-        "curated/join_metadata/",
         "curated/join_metadata_deduplicated/"
     ]
 
