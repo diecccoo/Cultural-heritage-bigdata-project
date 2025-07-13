@@ -54,7 +54,7 @@ try:
         .option("user", "postgres") \
         .option("password", "postgres") \
         .option("driver", "org.postgresql.Driver") \
-        .mode("overwrite") \
+        .mode("append") \
         .save()
 
     log("✅ Scrittura completata con successo in PostgreSQL")
