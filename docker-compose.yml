@@ -118,29 +118,28 @@ services:
     networks:
       - heritage-net   
 
+  eu-to-raw:
+    build:
+      context: .
+      dockerfile: ./spark-apps/eu-to-raw/Dockerfile
+    container_name: eu-to-raw
+    depends_on:
+      - kafka
+      - spark-master
+    networks:
+      - heritage-net
 
   europeana-ingestion:
     container_name: europeana-ingestion
     build: ./kafka-producers/europeana-ingestion
     depends_on:
       - kafka
+      - eu-to-raw
     restart: always
     volumes:
       - ./kafka-producers/europeana-ingestion/state:/app/state
     networks:
      - heritage-net
-
-
-  eu-to-raw:
-        build:
-          context: .
-          dockerfile: ./spark-apps/eu-to-raw/Dockerfile
-        container_name: eu-to-raw
-        depends_on:
-          - kafka
-          - spark-master
-        networks:
-          - heritage-net
 
 
   eu-to-cleansed:
@@ -158,25 +157,7 @@ services:
     networks:
       - heritage-net
 
-
-  annotation-producer:
-    container_name: annotation-producer
-    build:
-          context: .
-          dockerfile: ./kafka-producers/annotation-producer/Dockerfile
-    depends_on:
-      - kafka
-      - minio
-    restart: always
-    environment: 
-      AWS_ACCESS_KEY_ID:     minio
-      AWS_SECRET_ACCESS_KEY: minio123
-      S3A_ENDPOINT:          http://minio:9000
-      KAFKA_BROKER:          kafka:9092
-    networks:
-      - heritage-net
-
-
+  
   ugc-to-raw:
     build:
       context: .
@@ -189,7 +170,24 @@ services:
       - spark-master
     networks:
       - heritage-net
-  
+
+  annotation-producer:
+    container_name: annotation-producer
+    build:
+          context: .
+          dockerfile: ./kafka-producers/annotation-producer/Dockerfile
+    depends_on:
+      - ugc-to-raw
+      - kafka
+      - minio
+    restart: always
+    environment: 
+      AWS_ACCESS_KEY_ID:     minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      S3A_ENDPOINT:          http://minio:9000
+      KAFKA_BROKER:          kafka:9092
+    networks:
+      - heritage-net
   
   ugc-to-cleansed:   
     build:
@@ -203,20 +201,6 @@ services:
     networks:
       - heritage-net
 
-
-  join-eu-ugc-curated:
-    build:
-      context: .
-      dockerfile: ./spark-apps/join-eu-ugc-curated/Dockerfile
-    container_name: join-eu-ugc-curated
-    restart: always
-    depends_on:
-      - spark-master
-      - minio
-    networks:
-      - heritage-net
-
-
   qdrant:
     image: qdrant/qdrant
     container_name: qdrant
@@ -226,7 +210,6 @@ services:
       - qdrant-data:/qdrant/storage
     networks:
       - heritage-net
-
 
   embeddings-extractor:
     build:
@@ -255,6 +238,18 @@ services:
     networks:
       - heritage-net
 
+  join-eu-ugc-qdrant-to-curated:
+    build:
+      context: .
+      dockerfile: ./spark-apps/join-eu-ugc-qdrant-to-curated/Dockerfile
+    container_name: join-eu-ugc-qdrant-to-curated
+    restart: always
+    depends_on:
+      - spark-master
+      - minio
+      - qdrant
+    networks:
+      - heritage-net
 
   # embeddings-exporter:
   #   build:

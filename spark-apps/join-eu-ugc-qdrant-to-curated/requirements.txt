@@ -1,0 +1,4 @@
+pyspark==3.5.5
+delta-spark==3.3.1
+qdrant-client
+pandas
