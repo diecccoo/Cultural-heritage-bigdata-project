@@ -7,10 +7,10 @@ This folder contains machine learning components of our pipeline. These modules 
 
 They operate downstream of the Spark-based cleansing pipeline and upstream of any clustering or recommendation logic.
 Qdrant is used as a **vector database**, allowing us to store and search high-dimensional embeddings for semantic deduplication and similarity-based retrieval.
+
 ---
 
-## 📌 Architecture Overview
-## 🔄 Workflow Summary
+## Architecture overview
 
 This ML module runs after the Spark cleansing stage and operates as follows:
 
@@ -40,30 +40,7 @@ Canonicalized archive inside Qdrant
   → Ready for clustering and recommendation
 ```
 
-This design allows asynchronous processing and semantic deduplication of cultural objects based on image similarity.
-
-OPPURE
-
-## 🧭 Workflow Diagram (Mermaid)
-
-## 🧭 Workflow Diagram (Mermaid)
-
-```mermaid
-flowchart TD
-    A[Delta Table: cleansed/europeana/] --> B
-    B[embeddings-extractor] --> B1
-    B1[Download image & build prompt] --> B2
-    B2[Compute embeddings (CLIP)] --> B3
-    B3[Push to Qdrant with status="pending"] --> C
-    C[Qdrant DB] --> D
-    D[qdrant-deduplicator] --> D1
-    D1[Search for similar validated embeddings] --> D2
-    D2[Assign canonical_id if duplicate] --> D3
-    D3[Update status="validated"] --> E
-    E[Canonicalized Qdrant collection] --> F
-    F[→ ready for clustering, search, recommendations]
-```
-This diagram summarizes the two-stage ML pipeline: embedding generation and semantic deduplication via Qdrant.
+This design allows asynchronous processing and semantic deduplication of our objects based on image similarity.
 
 ---
 
@@ -187,7 +164,7 @@ ML-model/
 ## Notes & limitations
 
 - This pipeline assumes all image URLs are reachable and valid; if image download or embedding fails, the error is logged but **not retried**
-- Deduplication is performed **only on image embeddings** to reduce the risk of false positives from textual similarity SIAMO SICURI?
+- Deduplication is based **only** on image embeddings, as visual content provides a more stable and discriminative signal than text. This helps reduce false positives caused by generic or noisy textual metadata.
 - No points are deleted from Qdrant: all embeddings remain available for future clustering, recommendation, or analytics tasks
 
 ---
