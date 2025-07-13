@@ -1,72 +1,39 @@
-# join_eu_ugc_qdrant.py
-# ------------------------------------------------------------
-# Join Europeana + UGC filtrato con validated_ids da Qdrant
-# Ora con normalizzazione dei GUID
-# ------------------------------------------------------------
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import (
-    col, current_timestamp, lit, max as spark_max, first, udf
-)
-from pyspark.sql.types import StringType
+from pyspark.sql.functions import col, current_timestamp, lit, max as spark_max, first
 from delta import configure_spark_with_delta_pip
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
-from urllib.parse import urlparse, parse_qs, urlunparse, unquote, urlencode
 import time
-import os
 
 # =================== CONFIG ===================
-UGC_PATH       = "s3a://heritage/cleansed/user_generated/"
+# MinIO paths
+UGC_PATH = "s3a://heritage/cleansed/user_generated/"
 EUROPEANA_PATH = "s3a://heritage/cleansed/europeana/"
-CURATED_PATH   = "s3a://heritage/curated/join_metadata_deduplicated/"
+CURATED_PATH = "s3a://heritage/curated/join_metadata_deduplicated/"
 
-QDRANT_HOST       = "qdrant"
-QDRANT_PORT       = 6333
+# Qdrant config
+QDRANT_HOST = "qdrant"  
+QDRANT_PORT = 6333
 QDRANT_COLLECTION = "heritage_embeddings"
 
-RELOAD_EUROPEANA_MIN = 5
-RELOAD_QDRANT_MIN    = 5
-# ==============================================
+# Reload intervals (in minutes)
+RELOAD_EUROPEANA_MIN = 1
+RELOAD_QDRANT_MIN = 1
 
-# ---------- GUID normalisation -------------------------------------------------
-TRACKING_PREFIXES = ("utm_", "api")
-
-def normalize_guid(url: str) -> str:
-    """
-    Rende canonico l'URL:
-      – rimuove i parametri query che iniziano con utm_ o api
-      – decodifica URL-encoded
-      – lowercase sul dominio
-      – elimina lo slash finale
-    """
-    if url is None:
-        return None
-    url = unquote(url.strip())
-    p   = urlparse(url)
-    qs  = {k: v for k, v in parse_qs(p.query, keep_blank_values=True).items()
-           if not k.startswith(TRACKING_PREFIXES)}
-    return urlunparse((
-        p.scheme,
-        p.netloc.lower(),
-        p.path.rstrip("/"),
-        "",                        # params
-        urlencode(qs, doseq=True), # query
-        ""                         # fragment
-    ))
-
-normalize_udf = udf(normalize_guid, StringType())
-# -------------------------------------------------------------------------------
-
+# =============================================
 
 def get_validated_ids_from_qdrant():
     """
-    Query Qdrant per tutti i punti con status='validated'.
-    Ritorna un set di id_object deduplicati e normalizzati.
+    Query Qdrant for all points with status = 'validated'.
+    Return a set of unique id_object from the first point of each canonical_id group.
     """
     print("[DEBUG] Connessione a Qdrant e recupero punti 'validated'...")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
-    results, offset = [], None
+    # Scroll all points with status = "validated"
+    results = []
+    offset = None
+
     while True:
         batch, offset = client.scroll(
             collection_name=QDRANT_COLLECTION,
@@ -82,24 +49,20 @@ def get_validated_ids_from_qdrant():
 
     print(f"[DEBUG] Trovati {len(results)} punti con status=validated")
 
+    # Convert to DataFrame-style dict list
     import pandas as pd
-    points_data = [p.payload for p in results if p.payload]
+    points_data = [point.payload for point in results if point.payload]
     df = pd.DataFrame(points_data)
 
+    # Raggruppa per canonical_id e prendi il primo id_object
     if 'canonical_id' not in df.columns or 'id_object' not in df.columns:
         print("[DEBUG WARN] Campi canonical_id o id_object non trovati nei payload Qdrant.")
         return set()
 
-    validated_ids_raw = (
-        df.groupby("canonical_id")
-          .first()["id_object"]
-          .astype(str)
-          .tolist()
-    )
-    # normalizza subito
-    validated_ids = set(map(normalize_guid, validated_ids_raw))
-    print(f"[DEBUG] Totale id_object deduplicati (uno per canonical_id): {len(validated_ids)}")
-    print("[DEBUG] Esempi di id_object normalizzati (primi 10):")
+    grouped = df.groupby("canonical_id").first().reset_index()
+    validated_ids = set(grouped["id_object"].tolist())
+    print(f"[DEBUG] Totale id_object deduplicati (un per canonical_id): {len(validated_ids)}")
+    print("[DEBUG] Esempi di id_object da Qdrant (primi 10):")
     for id_ in list(validated_ids)[:10]:
         print(f" - {id_}")
     return validated_ids
@@ -115,7 +78,7 @@ def get_latest_processed_timestamp(spark):
         print(f"[DEBUG] Timestamp massimo trovato nel layer curated: {max_ts}")
         return max_ts
     except Exception as e:
-        print(f"[DEBUG] Nessun timestamp trovato: la tabella curated potrebbe non esistere ancora. Dettaglio: {e}")
+        print(f"[DEBUG] Nessun timestamp trovato: la tabella curated potrebbe non esistere ancora. Dettaglio errore: {str(e)}")
         return None
 
 
@@ -124,96 +87,109 @@ def read_latest_delta_table(spark, path):
 
 
 # ========== SPARK SESSION ==========
-builder = (
-    SparkSession.builder
-      .appName("Join_EU_UGC_Qdrant_Curated")
-      .config("spark.hadoop.fs.s3a.access.key",     os.getenv("AWS_ACCESS_KEY_ID",     "minio"))
-      .config("spark.hadoop.fs.s3a.secret.key",     os.getenv("AWS_SECRET_ACCESS_KEY", "minio123"))
-      .config("spark.hadoop.fs.s3a.endpoint",       os.getenv("AWS_ENDPOINT", "http://minio:9000"))
-      .config("spark.hadoop.fs.s3a.impl",           "org.apache.hadoop.fs.s3a.S3AFileSystem")
-      .config("spark.hadoop.fs.s3a.path.style.access", "true")
-      .config("spark.sql.extensions",               "io.delta.sql.DeltaSparkSessionExtension")
-      .config("spark.sql.catalog.spark_catalog",    "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-)
+builder = SparkSession.builder \
+    .appName("Join_EU_UGC_Qdrant_Curated") \
+    .config("spark.hadoop.fs.s3a.access.key", "minio") \
+    .config("spark.hadoop.fs.s3a.secret.key", "minio123") \
+    .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+    .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
 
 spark = configure_spark_with_delta_pip(builder).getOrCreate()
 
 # ========== INITIALIZATION ==========
 last_europeana_reload = 0
-last_qdrant_reload    = 0
-europeana_df          = None
-validated_ids_bcast   = None   # broadcast variable
+last_qdrant_reload = 0
+europeana_df = None
+validated_ids = None
 
-print("[DEBUG] Job avviato: join con filtro Qdrant + Delta (GUID normalizzati)")
+print("[DEBUG] Job avviato: join con filtro Qdrant + Delta")
 
 while True:
     now = time.time()
 
-    # --- Europaena reload ------------------------------------------------------
+    # Reload Europeana if necessary
     if europeana_df is None or (now - last_europeana_reload > RELOAD_EUROPEANA_MIN * 60):
         print("[DEBUG] Ricarico metadati Europeana da Delta...")
-        europeana_df = read_latest_delta_table(spark, EUROPEANA_PATH) \
-                          .withColumn("guid_norm", normalize_udf(col("guid")))
+        europeana_df = read_latest_delta_table(spark, EUROPEANA_PATH)
         last_europeana_reload = now
 
-    # --- Validated IDs reload --------------------------------------------------
-    if (validated_ids_bcast is None) or (now - last_qdrant_reload > RELOAD_QDRANT_MIN * 60):
+    # Reload validated IDs from Qdrant if necessary
+    if validated_ids is None or (now - last_qdrant_reload > RELOAD_QDRANT_MIN * 60):
         validated_ids = get_validated_ids_from_qdrant()
-        validated_ids_bcast = spark.sparkContext.broadcast(list(validated_ids))
         last_qdrant_reload = now
 
-    # --- Filtra Europeana sui GUID norm ----------------------------------------
-    filtered_europeana_df = europeana_df.filter(col("guid_norm").isin(validated_ids_bcast.value))
 
-    print("[DEBUG] Esempio Europeana filtrata (guid_norm, title):")
-    cols_to_show = ["guid_norm"] + (["title"] if "title" in filtered_europeana_df.columns else [])
-    filtered_europeana_df.select(*cols_to_show).show(5, truncate=False)
+    
+    # Filtro Europeana su validated_ids da Qdrant
+    filtered_europeana_df = europeana_df.filter(col("guid").isin(list(validated_ids)))
+    print("[DEBUG] Esempio metadati Europeana filtrati (guid, title se presente):")
+    if "title" in filtered_europeana_df.columns:
+        filtered_europeana_df.select("guid", "title").show(5, truncate=False)
+    else:
+        filtered_europeana_df.select("guid").show(5, truncate=False)
 
+    print(f"[DEBUG] Lista guid filtrati da Qdrant: {validated_ids}")
     print(f"[DEBUG] Europeana count totale: {europeana_df.count()}")
     print(f"[DEBUG] Europeana filtrata: {filtered_europeana_df.count()}")
 
-    # --- Recupera ultimo timestamp dal curated ---------------------------------
-    latest_ts = get_latest_processed_timestamp(spark)
 
-    # --- Carica UGC ------------------------------------------------------------
+    # Trova l'ultimo timestamp processato
+    latest_ts = get_latest_processed_timestamp(spark)
+    print(f"[DEBUG] Ultimo timestamp processato in curated: {latest_ts}")
+
+    # Leggi annotazioni nuove da UGC
     ugc_df = spark.read.format("delta").load(UGC_PATH)
     if latest_ts:
         ugc_df = ugc_df.filter(col("timestamp") > lit(latest_ts))
-    ugc_df = (
-        ugc_df.withColumnRenamed("object_id", "guid")
-              .withColumn("guid_norm", normalize_udf(col("guid")))
-    )
+    ugc_df = ugc_df.withColumnRenamed("object_id", "guid")
+    
+    try:
+        if ugc_df.rdd.isEmpty():
+            print("[DEBUG] UGC è vuoto: nessun dato da mostrare.")
+        else:
+            print("[DEBUG] Esempio valori UGC (guid, timestamp):")
+            ugc_df.select("guid", "timestamp").show(5, truncate=False)
+    except Exception as e:
+        print(f"[DEBUG ERROR] Errore nel tentativo di mostrare UGC: {str(e)}")
 
-    if ugc_df.rdd.isEmpty():
-        print("[DEBUG] Nessuna nuova annotazione. Attendo...")
+
+    ugc_count = ugc_df.count()
+    if ugc_count == 0:
+        print("[DEBUG] Nessuna nuova annotazione trovata. Attendo...")
         time.sleep(60)
         continue
+    else:
+        print(f"[DEBUG] Annotazioni nuove trovate: {ugc_count}")
 
-    print("[DEBUG] Esempio UGC (guid_norm, timestamp):")
-    ugc_df.select("guid_norm", "timestamp").show(5, truncate=False)
+        ugc_ids = set([r["guid"] for r in ugc_df.select("guid").distinct().collect()])
+        europeana_ids = set([r["guid"] for r in filtered_europeana_df.select("guid").distinct().collect()])
+        intersection = ugc_ids.intersection(europeana_ids)
 
-    # --- Intersezione rapida ----------------------------------------------------
-    ugc_ids        = set(r["guid_norm"] for r in ugc_df.select("guid_norm").distinct().collect())
-    europeana_ids  = set(r["guid_norm"] for r in filtered_europeana_df.select("guid_norm").distinct().collect())
-    intersection   = ugc_ids & europeana_ids
-    print(f"[DEBUG] Oggetti in comune (guid_norm): {len(intersection)}")
+        if len(intersection) == 0:
+            print("[DEBUG] Nessuna annotazione corrisponde a oggetti Europeana deduplicati.")
+            time.sleep(60)
+            continue
 
-    if not intersection:
-        print("[DEBUG] Nessuna annotazione corrisponde. Attendo...")
-        time.sleep(60)
-        continue
 
-    # --- Join ------------------------------------------------------------------
-    print("[DEBUG] Eseguo join su guid_norm...")
-    joined_df = (
-        ugc_df.join(filtered_europeana_df, on="guid_norm", how="inner")
-              .withColumn("joined_at", current_timestamp())
-    )
+    ugc_ids = set([r["guid"] for r in ugc_df.select("guid").distinct().collect()])
+    europeana_ids = set([r["guid"] for r in filtered_europeana_df.select("guid").distinct().collect()])
+
+    intersection = ugc_ids.intersection(europeana_ids)
+    print(f"[DEBUG] Oggetti in comune tra Europeana filtrata e UGC: {len(intersection)}")
+    print(f"[DEBUG] UGC count: {ugc_df.count()}")
+    print(f"[DEBUG] Europeana filtrata count: {filtered_europeana_df.count()}")
+
+    print("[DEBUG] Eseguo join tra UGC e Europeana (filtrata Qdrant)...")
+    joined_df = ugc_df.join(filtered_europeana_df, on="guid", how="inner") \
+                      .withColumn("joined_at", current_timestamp())
 
     row_count = joined_df.count()
     print(f"[DEBUG] Join completato. Righe da scrivere: {row_count}")
 
-    if row_count:
+    if row_count > 0:
         joined_df.write.format("delta").mode("append").save(CURATED_PATH)
         print("[DEBUG] Scrittura completata nel layer curated.")
 
