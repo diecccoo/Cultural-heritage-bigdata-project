@@ -29,14 +29,29 @@
 -- );
 
 
-CREATE TABLE IF NOT EXISTS join_metadata (
+CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     id_object TEXT PRIMARY KEY,
-    title TEXT,
-    creator TEXT,
-    description TEXT,
-    image_url TEXT,
-    comment TEXT,
     user_id TEXT,
-    annotation_timestamp TIMESTAMP,
-    tags TEXT[]
+    tags TEXT[],
+    comment TEXT,
+    timestamp TIMESTAMP,
+    location TEXT,
+    ingestion_time TIMESTAMP,
+    source TEXT,
+    creator TEXT,
+    dataProvider TEXT[],
+    description TEXT,
+    edm_rights TEXT,
+    format TEXT,
+    image_url TEXT[],
+    isShownBy TEXT[],
+    language TEXT,
+    provider TEXT,
+    rights TEXT,
+    subject TEXT[],
+    timestamp_created TIMESTAMP,
+    title TEXT,
+    type TEXT,
+    joined_at TIMESTAMP
 );
+
