@@ -2,12 +2,17 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, to_timestamp, from_json
 from pyspark.sql.types import ArrayType, StringType
 import sys
-import psycopg2
+
 
 def log(msg):
     print(f"[Curated→Postgres] {msg}")
 
+log("Inizio script Spark")
+
+# Crea la sessione Spark
 spark = SparkSession.builder.appName("CuratedToPostgres").getOrCreate()
+
+log("Sessione Spark creata")
 
 # Configura MinIO
 hadoopConf = spark._jsc.hadoopConfiguration()
@@ -72,42 +77,19 @@ try:
 
 
 
-    # ====== Scrivi su tabella STAGING ======
+    # Scrive su PostgreSQL
     df_mapped.write \
         .format("jdbc") \
         .option("url", "jdbc:postgresql://postgres:5432/heritage") \
-        .option("dbtable", "join_metadata_staging") \
+        .option("dbtable", "join_metadata_deduplicated") \
         .option("user", "postgres") \
         .option("password", "postgres") \
         .option("driver", "org.postgresql.Driver") \
-        .mode("overwrite") \
+        .mode("append") \
         .save()
 
-    log("✅ Scrittura completata in join_metadata_staging")
+    log("✅ Scrittura completata con successo in PostgreSQL")
 
 except Exception as e:
     log(f"❌ Errore durante il processo: {str(e)}")
     sys.exit(1)
-
-
-try:
-    log("🔄 Eseguo refresh da STAGING a tabella finale...")
-
-    conn = psycopg2.connect(
-        host="postgres",
-        dbname="heritage",
-        user="postgres",
-        password="postgres"
-    )
-    cur = conn.cursor()
-
-    cur.execute("TRUNCATE TABLE join_metadata_deduplicated;")
-    cur.execute("INSERT INTO join_metadata_deduplicated SELECT * FROM join_metadata_staging;")
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    log("✅ Refresh completato con successo!")
-except Exception as e:
-    log(f"❌ Errore durante il refresh PostgreSQL: {e}")

@@ -4,7 +4,7 @@ USER root
 WORKDIR /app
 
 # Installa librerie Spark e Delta
-RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
+RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1 psycopg2-binary pandas
 
 USER 1001
 

@@ -1,34 +1,3 @@
--- CREATE TABLE IF NOT EXISTS europeana_items (
---     guid TEXT PRIMARY KEY,
---     title TEXT,
---     creator TEXT,
---     image_url TEXT,
---     timestamp_created TEXT,
---     provider TEXT,
---     description TEXT,
---     subject TEXT,
---     language TEXT,
---     type TEXT,
---     format TEXT,
---     rights TEXT,
---     dataProvider TEXT,
---     isShownAt TEXT,
---     isShownBy TEXT,
---     edm_rights TEXT,
---     raw_json JSONB
--- );
-
--- CREATE TABLE IF NOT EXISTS ugc_annotations (
---     id SERIAL PRIMARY KEY,
---     object_guid TEXT REFERENCES europeana_items(guid),
---     user_id TEXT,
---     comment TEXT,
---     tags TEXT[],
---     ugc_timestamp TIMESTAMP,
---     location TEXT
--- );
-
-
 CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     id_object TEXT PRIMARY KEY,
     user_id TEXT,
@@ -36,7 +5,7 @@ CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     comment TEXT,
     timestamp TIMESTAMP,
     location TEXT,
-    ingestion_time TIMESTAMP,
+    ingestion_time_ugc TIMESTAMP,
     source TEXT,
     creator TEXT,
     dataProvider TEXT[],
@@ -49,9 +18,11 @@ CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     provider TEXT,
     rights TEXT,
     subject TEXT[],
-    timestamp_created TIMESTAMP,
+    timestamp_created_europeana TIMESTAMP,
     title TEXT,
     type TEXT,
     joined_at TIMESTAMP
 );
 
+-- Copia identica per staging
+CREATE TABLE IF NOT EXISTS join_metadata_staging (LIKE join_metadata_deduplicated INCLUDING ALL);

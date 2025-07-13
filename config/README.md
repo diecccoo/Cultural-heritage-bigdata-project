@@ -109,7 +109,7 @@ Custom Dockerfile used to build the container that runs `init_minio.py`. This en
 ### `postgres/init.sql`
 SQL script automatically executed when the PostgreSQL container starts for the first time. It currently creates the following table:
 
-- `join_metadata` – used in the **serving layer** to store cleaned and joined Europeana metadata and user annotations.
+- `join_metadata_deduplicated` – used in the **serving layer** to store cleaned and joined Europeana metadata and user annotations.
 
 ---
 
