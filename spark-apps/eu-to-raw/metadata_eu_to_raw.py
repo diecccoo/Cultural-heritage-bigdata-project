@@ -59,7 +59,7 @@ try:
         .format("kafka") \
         .option("kafka.bootstrap.servers", "kafka:9092") \
         .option("subscribe", "europeana_metadata") \
-        .option("startingOffsets", "earliest") \
+        .option("startingOffsets", "latest") \
         .option("failOnDataLoss", "false") \
         .load() \
 
