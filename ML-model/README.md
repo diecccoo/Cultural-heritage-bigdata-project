@@ -46,21 +46,22 @@ OPPURE
 
 ## 🧭 Workflow Diagram (Mermaid)
 
+## 🧭 Workflow Diagram (Mermaid)
+
 ```mermaid
 flowchart TD
-    A[Delta Table: cleansed/europeana/] --> B[embeddings-extractor]
-    B --> B1[Download image & build prompt]
-    B1 --> B2[Compute embeddings (CLIP)]
-    B2 --> B3[Push to Qdrant with status="pending"]
-
-    B3 --> C[Qdrant DB]
-    C --> D[qdrant-deduplicator]
-    D --> D1[Search for similar validated embeddings]
-    D1 --> D2[Assign canonical_id if duplicate]
-    D2 --> D3[Update status="validated"]
-
-    D3 --> E[Canonicalized Qdrant collection]
-    E --> F[→ ready for clustering, search, recommendations]
+    A[Delta Table: cleansed/europeana/] --> B
+    B[embeddings-extractor] --> B1
+    B1[Download image & build prompt] --> B2
+    B2[Compute embeddings (CLIP)] --> B3
+    B3[Push to Qdrant with status="pending"] --> C
+    C[Qdrant DB] --> D
+    D[qdrant-deduplicator] --> D1
+    D1[Search for similar validated embeddings] --> D2
+    D2[Assign canonical_id if duplicate] --> D3
+    D3[Update status="validated"] --> E
+    E[Canonicalized Qdrant collection] --> F
+    F[→ ready for clustering, search, recommendations]
 ```
 This diagram summarizes the two-stage ML pipeline: embedding generation and semantic deduplication via Qdrant.
 
