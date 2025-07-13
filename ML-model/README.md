@@ -1,4 +1,4 @@
-# ML Models
+# ML Model
 
 This folder contains machine learning components of our pipeline. These modules run in Docker containers and are responsible for:
 
