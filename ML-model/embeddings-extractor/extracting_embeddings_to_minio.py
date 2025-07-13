@@ -1,3 +1,5 @@
+# script vecchio da non utilizzare
+
 import os
 import time
 import io
