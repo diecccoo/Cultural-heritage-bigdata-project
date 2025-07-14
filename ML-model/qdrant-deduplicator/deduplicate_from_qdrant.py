@@ -16,7 +16,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # ========== CONFIGURAZIONE ==========
 COLLECTION_NAME = "heritage_embeddings"
 BATCH_SIZE = 100  # Numero di punti da processare per batch
-SIMILARITY_THRESHOLD = 0.98  # Soglia di similarità per la deduplicazione
+SIMILARITY_THRESHOLD = 0.99  # Soglia di similarità per la deduplicazione
 SLEEP_SECONDS = 5  # Secondi di attesa tra i batch
 MAX_SEARCH_RESULTS = 1000  # Massimo numero di risultati per ricerca similarity
 
