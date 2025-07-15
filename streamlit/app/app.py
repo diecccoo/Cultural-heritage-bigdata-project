@@ -93,6 +93,80 @@ def get_filter_options() -> Dict[str, List[str]]:
         return {}
 
 def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
+    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per id_object."""
+    conn = get_db_connection()
+    if not conn:
+        return [], 0
+
+    try:
+        cursor = conn.cursor()
+
+        # Usiamo DISTINCT ON (id_object) per prendere solo una riga per ogni id_object
+        # e ordiniamo per id_object per una consistenza nella selezione del "primo" duplicato
+        # Inseriamo l'ordinamento anche all'interno del DISTINCT ON per determinare quale riga viene selezionata
+        # E poi un secondo ORDER BY per la paginazione, che può essere lo stesso.
+
+        query_base = "SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        params = []
+
+        # Aggiunta filtri
+        if filters.get('creator'):
+            query_base += " AND creator = %s"
+            params.append(filters['creator'])
+
+        if filters.get('type'):
+            query_base += " AND type = %s"
+            params.append(filters['type'])
+
+        if filters.get('subjects'):
+            query_base += " AND subject && %s"
+            params.append(filters['subjects'])
+
+        if filters.get('tags'):
+            query_base += " AND tags && %s"
+            params.append(filters['tags'])
+
+        # Per il conteggio totale, dobbiamo contare gli id_object distinti dopo i filtri
+        count_query = f"SELECT COUNT(DISTINCT id_object) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        count_params = []
+        if filters.get('creator'):
+            count_query += " AND creator = %s"
+            count_params.append(filters['creator'])
+        if filters.get('type'):
+            count_query += " AND type = %s"
+            count_params.append(filters['type'])
+        if filters.get('subjects'):
+            count_query += " AND subject && %s"
+            count_params.append(filters['subjects'])
+        if filters.get('tags'):
+            count_query += " AND tags && %s"
+            count_params.append(filters['tags'])
+
+
+        cursor.execute(count_query, count_params)
+        total_count = cursor.fetchone()[0]
+
+        # Limitazione risultati
+        total_count = min(total_count, MAX_RESULTS)
+
+        # Query paginata
+        # Aggiungiamo un ORDER BY per garantire la consistenza di DISTINCT ON
+        # e un secondo ORDER BY per la paginazione
+        query_paginated = f"{query_base} ORDER BY id_object, id LIMIT %s OFFSET %s" # Ordina per id_object e poi per id (l'ID univoco dell'annotazione)
+        params.extend([page_size, (page - 1) * page_size])
+
+        cursor.execute(query_paginated, params)
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        cursor.close()
+        return results, total_count
+
+    except Exception as e:
+        st.error(f"Errore nella ricerca: {str(e)}")
+        return [], 0
+
+def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
     """Ricerca oggetti con filtri e paginazione"""
     conn = get_db_connection()
     if not conn:
@@ -101,8 +175,7 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
     try:
         cursor = conn.cursor()
         
-        # Costruzione query base
-        query = "SELECT * FROM join_metadata_deduplicated WHERE 1=1"
+        query = "SELECT * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
         params = []
         
         # Aggiunta filtri
@@ -236,45 +309,45 @@ def get_recommendations(object_id: str) -> List[Dict]:
 def render_gallery_view():
     """Renderizza la vista gallery con filtri e griglia"""
     st.title("🏛️ Cultural Heritage Dashboard")
-    
+
     # Carica opzioni filtri
     if 'filter_options' not in st.session_state:
         st.session_state.filter_options = get_filter_options()
-    
+
     # Sidebar con filtri
     with st.sidebar:
         st.header("🔍 Filtri")
-        
+
         # Creator dropdown
         selected_creator = st.selectbox(
             "Creator",
             options=[None] + st.session_state.filter_options.get('creators', []),
-            index=0 if not st.session_state.get('selected_creator') else 
+            index=0 if not st.session_state.get('selected_creator') else
                   st.session_state.filter_options.get('creators', []).index(st.session_state.selected_creator) + 1
         )
-        
+
         # Subject multiselect
         selected_subjects = st.multiselect(
             "Subject",
             options=st.session_state.filter_options.get('subjects', []),
             default=st.session_state.get('selected_subjects', [])
         )
-        
+
         # Type dropdown
         selected_type = st.selectbox(
             "Type",
             options=[None] + st.session_state.filter_options.get('types', []),
-            index=0 if not st.session_state.get('selected_type') else 
+            index=0 if not st.session_state.get('selected_type') else
                   st.session_state.filter_options.get('types', []).index(st.session_state.selected_type) + 1
         )
-        
+
         # Tags multiselect
         selected_tags = st.multiselect(
             "Tags",
             options=st.session_state.filter_options.get('tags', []),
             default=st.session_state.get('selected_tags', [])
         )
-        
+
         # Reset button
         if st.button("🔄 Reset Filters"):
             st.session_state.selected_creator = None
@@ -283,7 +356,7 @@ def render_gallery_view():
             st.session_state.selected_tags = []
             st.session_state.current_page = 1
             st.experimental_rerun()
-    
+
     # Aggiorna filtri in session state
     filters_changed = (
         st.session_state.get('selected_creator') != selected_creator or
@@ -291,14 +364,14 @@ def render_gallery_view():
         st.session_state.get('selected_type') != selected_type or
         st.session_state.get('selected_tags') != selected_tags
     )
-    
+
     if filters_changed:
         st.session_state.selected_creator = selected_creator
         st.session_state.selected_subjects = selected_subjects
         st.session_state.selected_type = selected_type
         st.session_state.selected_tags = selected_tags
         st.session_state.current_page = 1
-    
+
     # Costruisci filtri per query
     filters = {}
     if selected_creator:
@@ -309,18 +382,18 @@ def render_gallery_view():
         filters['type'] = selected_type
     if selected_tags:
         filters['tags'] = selected_tags
-    
+
     # Ricerca oggetti
     current_page = st.session_state.get('current_page', 1)
     gallery_data, total_results = search_objects(filters, current_page)
-    
+
     # Salva risultati in session state
     st.session_state.gallery_data = gallery_data
     st.session_state.total_results = total_results
-    
+
     # Counter risultati
     st.info(f"📊 Trovati {total_results} oggetti")
-    
+
     # Griglia immagini (4 colonne x 5 righe)
     if gallery_data:
         for row in range(5):
@@ -330,29 +403,30 @@ def render_gallery_view():
                 if item_idx < len(gallery_data):
                     item = gallery_data[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
-                    
+
                     with col:
-                        st.image(image_url, use_column_width=True)
-                        if st.button(f"📖 Dettagli", key=f"detail_{item['id_object']}"):
+                        # AGGIUNGI QUESTA RIGA PER VISUALIZZARE L'IMMAGINE
+                        st.image(image_url, use_column_width=True, caption=item.get('title', '')) # Aggiungi anche un caption opzionale
+
+                        if st.button(f"📖 Dettagli", key=f"detail_{item['id']}"):
                             st.session_state.current_view = 'detail'
                             st.session_state.current_object_id = item['id_object']
                             st.experimental_rerun()
-    
     # Paginazione
     max_pages = min(3, (total_results + PAGE_SIZE - 1) // PAGE_SIZE)
-    
+
     if max_pages > 1:
         col1, col2, col3 = st.columns([1, 2, 1])
-        
+
         with col1:
             if current_page > 1:
                 if st.button("⬅️ Precedente"):
                     st.session_state.current_page = current_page - 1
                     st.experimental_rerun()
-        
+
         with col2:
             st.write(f"Pagina {current_page} di {max_pages}")
-        
+
         with col3:
             if current_page < max_pages:
                 if st.button("Successiva ➡️"):
@@ -442,7 +516,7 @@ def render_detail_view():
                     
                     with col:
                         st.image(image_url, use_column_width=True)
-                        if st.button(f"👁️", key=f"rec_{item['id_object']}"):
+                        if st.button(f"👁️", key=f"rec_{item['id']}"): # <-- cambiato da id_object a id
                             st.session_state.current_object_id = item['id_object']
                             st.experimental_rerun()
     else:
@@ -487,3 +561,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
