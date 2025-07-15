@@ -1,7 +1,6 @@
 # Puoi aggiungere qui eventuali altre librerie Python che userai nel file app.py (es. matplotlib, numpy, pydeck, ecc.).
-
-streamlit
-pandas
-requests
-plotly
-redis
+streamlit==1.28.0
+psycopg2-binary==2.9.7
+qdrant-client==1.6.4
+pandas==2.1.1
+requests==2.31.0

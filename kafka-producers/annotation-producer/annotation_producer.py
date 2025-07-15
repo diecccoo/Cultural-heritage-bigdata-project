@@ -156,4 +156,4 @@ while True:
     }
     producer.send(KAFKA_TOPIC, annotation)
     print("Pubblicata:", annotation)
-    time.sleep(3)  # Attendi x secondi tra le pubblicazioni
+    time.sleep(2)  # Attendi x secondi tra le pubblicazioni

@@ -338,6 +338,26 @@ services:
     networks:
       - heritage-net
 
+  streamlit:
+    build: ./streamlit/app
+    container_name: streamlit
+    ports:
+      - "8501:8501"
+    depends_on:
+      - postgres
+      - qdrant
+    networks:
+      - heritage-net
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    volumes:
+      - ./streamlit/app:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   heritage-net:

@@ -24,7 +24,6 @@ try:
     df = spark.read.format("delta").load("s3a://heritage/curated/join_metadata_deduplicated/")
     log("Delta join_metadata_deduplicated caricata correttamente")
 
-    df = df.withColumn("dataProvider", from_json("dataProvider", ArrayType(StringType())))
     df = df.withColumn("image_url", from_json("image_url", ArrayType(StringType())))
     df = df.withColumn("isShownBy", from_json("isShownBy", ArrayType(StringType())))
     df = df.withColumn("subject", from_json("subject", ArrayType(StringType())))
@@ -41,12 +40,11 @@ try:
         to_timestamp("ingestion_time").alias("ingestion_time_ugc"),
         col("source"),
         col("creator"),
-        col("dataProvider"),
         col("description"),
         col("edm_rights"),
         col("format"),
         col("image_url"),
-        col("isShownBy"),
+        col("isShownBy").alias("isshownby"),
         col("language"),
         col("provider"),
         col("rights"),
@@ -102,7 +100,23 @@ try:
     cur = conn.cursor()
 
     cur.execute("TRUNCATE TABLE join_metadata_deduplicated;")
-    cur.execute("INSERT INTO join_metadata_deduplicated SELECT * FROM join_metadata_staging;")
+    cur.execute("""
+        INSERT INTO join_metadata_deduplicated (
+            id_object, user_id, tags, comment, timestamp, location,
+            ingestion_time_ugc, source, creator,
+            description, edm_rights, format, image_url, isshownby,
+            language, provider, rights, subject, timestamp_created_europeana,
+            title, type, joined_at
+        )
+        SELECT 
+            id_object, user_id, tags, comment, timestamp, location,
+            ingestion_time_ugc, source, creator,
+            description, edm_rights, format, image_url, isshownby,
+            language, provider, rights, subject, timestamp_created_europeana,
+            title, type, joined_at
+        FROM join_metadata_staging
+    """)
+
 
     conn.commit()
     cur.close()

@@ -28,7 +28,7 @@ def get_validated_ids_from_qdrant():
     Return a set of unique id_object from the first point of each canonical_id group.
     """
     print("[DEBUG] Connessione a Qdrant e recupero punti 'validated'...")
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=20)
 
     # Scroll all points with status = "validated"
     results = []
@@ -193,5 +193,5 @@ while True:
         joined_df.write.format("delta").mode("append").save(CURATED_PATH)
         print("[DEBUG] Scrittura completata nel layer curated.")
 
-    print("[DEBUG] Attendo 60 secondi prima del prossimo ciclo...")
-    time.sleep(60)
+    print("[DEBUG] Attendo 30 secondi prima del prossimo ciclo...")
+    time.sleep(30)

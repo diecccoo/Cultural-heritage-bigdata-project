@@ -10,7 +10,7 @@ from urllib.parse import quote
 # --- Configurazione ---
 API_KEY = "ianlefuck"
 ROWS_PER_PAGE = 100
-MAX_PAGES_PER_HOUR = 10  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
+MAX_PAGES_PER_HOUR = 5  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 2
 MAX_CONSECUTIVE_FAILURES = 10
