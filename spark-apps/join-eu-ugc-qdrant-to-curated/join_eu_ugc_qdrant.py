@@ -132,8 +132,9 @@ while True:
         filtered_europeana_df.select("guid").show(5, truncate=False)
 
     print(f"[DEBUG] Lista guid filtrati da Qdrant: {validated_ids}")
-    print(f"[DEBUG] Europeana count totale: {europeana_df.count()}")
-    print(f"[DEBUG] Europeana filtrata: {filtered_europeana_df.count()}")
+    print(f"[DEBUG] Europeana totali prima del filtro: {europeana_df.count()}")
+    print(f"[DEBUG] Europeana filtrati dopo Qdrant: {filtered_europeana_df.count()}")
+
 
 
     # Trova l'ultimo timestamp processato
@@ -168,12 +169,6 @@ while True:
         europeana_ids = set([r["guid"] for r in filtered_europeana_df.select("guid").distinct().collect()])
         intersection = ugc_ids.intersection(europeana_ids)
 
-        if len(intersection) == 0:
-            print("[DEBUG] Nessuna annotazione corrisponde a oggetti Europeana deduplicati.")
-            time.sleep(60)
-            continue
-
-
     ugc_ids = set([r["guid"] for r in ugc_df.select("guid").distinct().collect()])
     europeana_ids = set([r["guid"] for r in filtered_europeana_df.select("guid").distinct().collect()])
 
@@ -183,8 +178,14 @@ while True:
     print(f"[DEBUG] Europeana filtrata count: {filtered_europeana_df.count()}")
 
     print("[DEBUG] Eseguo join tra UGC e Europeana (filtrata Qdrant)...")
-    joined_df = ugc_df.join(filtered_europeana_df, on="guid", how="inner") \
+    joined_df = ugc_df.join(filtered_europeana_df, on="guid", how="right") \
                       .withColumn("joined_at", current_timestamp())
+   
+    print(f"[METRICHE] Annotazioni totali: {ugc_df.count()}")
+    print(f"[METRICHE] Oggetti Europeana filtrati (presenti in Qdrant): {filtered_europeana_df.count()}")
+    print(f"[METRICHE] Annotazioni collegate (dopo join): {joined_df.count()}")
+    print(f"[METRICHE] Annotazioni escluse (senza canonical_id valido): {ugc_df.count() - joined_df.count()}")
+
 
     row_count = joined_df.count()
     print(f"[DEBUG] Join completato. Righe da scrivere: {row_count}")
