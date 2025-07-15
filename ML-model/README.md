@@ -112,7 +112,7 @@ This container runs the `deduplicate_from_qdrant.py` script, which scans Qdrant 
 - Queries Qdrant for points where `status = pending`
 - For each pending point:
   - Uses the `embedding_image` vector to search for similar points already marked as `validated`
-  - If the top match has cosine similarity ≥ `0.98`, the same `canonical_id` is reused
+  - If the top match has cosine similarity ≥ `0.99`, the same `canonical_id` is reused
   - If no match is similar enough, a new `canonical_id` is generated using `uuid4`
 - The point's payload is updated in Qdrant with:
   - `status: validated`

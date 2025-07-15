@@ -1,5 +1,3 @@
-# Questo script Python serve per scaricare oggetti culturali (con immagini o testo) dall'API Europeana, uno alla volta per ciascun provider, e inviarli su Kafka (topic europeana_metadata). Tiene traccia di ciò che ha già scaricato per evitare duplicati e salva il suo stato per continuare nel tempo.
-# Estrae metadati Solo se c’è edmIsShownBy e guid nuovo
 import requests
 import json
 import logging
@@ -11,8 +9,8 @@ from urllib.parse import quote
 
 # --- Configurazione ---
 API_KEY = "ianlefuck"
-ROWS_PER_PAGE = 100  #sconsigliato da europeana sopra i 100
-MAX_PAGES_PER_HOUR = 20  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
+ROWS_PER_PAGE = 100
+MAX_PAGES_PER_HOUR = 5  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 2
 MAX_CONSECUTIVE_FAILURES = 10
@@ -71,7 +69,7 @@ if os.path.exists(OFFSET_FILE):
     with open(OFFSET_FILE, "r") as f:
         state = json.load(f)
 else:
-    state = {"provider_index": 0}
+    state = {"provider_index": 0, "page": 1}
 
 if os.path.exists(downloaded_guids_file):
     with open(downloaded_guids_file, "r") as f:
@@ -79,6 +77,10 @@ if os.path.exists(downloaded_guids_file):
 else:
     downloaded_guids = set()
 
+
+# --- Configurazione ---
+# Sostituisci con la tua API key valida ottenuta da Europeana
+API_KEY = "ianlefuck" 
 
 # Modifica la costruzione dell'URL per renderla più robusta
 def build_europeana_url(query, provider, cursor):
@@ -103,16 +105,18 @@ def build_europeana_url(query, provider, cursor):
 
 # --- Loop su max pagine ---
 provider = PROVIDERS[state["provider_index"]]
-logging.info(f"🔍 Inizio: provider '{provider}'")
+page = max(1, state["page"])  # Fix per evitare start=0
+logging.info(f"🔍 Inizio: provider '{provider}' | dalla pagina {page}")
 
 consecutive_failures = 0
 total_saved = 0
 
+query = "*:*"
 filter_query = (
     f'PROVIDER:"{provider}" AND (TYPE:IMAGE OR TYPE:TEXT) AND LANGUAGE:{LANGUAGE}'
 )
-
-cursor = "*"  
+qf_string = f"&qf={quote(filter_query)}"
+cursor = "*"  # Inizio dello scroll
 pages_fetched = 0
 
 
@@ -156,8 +160,6 @@ while pages_fetched < MAX_PAGES_PER_HOUR:
     items = data.get("items", [])
     if not items:
         logging.warning("⚠️ Nessun oggetto restituito. Cambio provider.")
-        # Aggiorna subito lo stato per passare al prossimo provider
-        state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
         break
 
     # Processa gli items
@@ -165,14 +167,13 @@ while pages_fetched < MAX_PAGES_PER_HOUR:
         guid = item.get("guid", "")
         if not guid or guid in downloaded_guids:
             continue
-        image_url = item.get("edmIsShownBy") or item.get("isShownBy")
-        if not image_url:
-            continue 
+        if "edmIsShownBy" not in item:
+            continue
 
         metadata = {
             "title": item.get("title", [""])[0],
             "guid": guid,
-            "image_url": image_url,
+            "image_url": item.get("edmIsShownBy"),
             "timestamp_created": datetime.utcnow().isoformat(),
             "provider": provider,
             "description": item.get("dcDescription", [""])[0] if "dcDescription" in item else None,
@@ -184,6 +185,7 @@ while pages_fetched < MAX_PAGES_PER_HOUR:
             "rights": item.get("rights", [""])[0] if "rights" in item else None,
             "dataProvider": item.get("dataProvider", ""),
             "isShownAt": item.get("edmIsShownAt", ""),
+            "isShownBy": item.get("edmIsShownBy", ""),
             "edm_rights": item.get("edmRights", [""])[0] if "edmRights" in item else None,
         }
 
@@ -205,13 +207,17 @@ while pages_fetched < MAX_PAGES_PER_HOUR:
         break
 
     pages_fetched += 1
+    page += 1
+    state["page"] = page
 
     # Aggiungi un piccolo delay per non sovraccaricare l'API
-    time.sleep(2)
+    time.sleep(1)
 
 # Se finito o interrotto → passa al prossimo provider
-state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
-logging.info(f"➡️ Prossima volta useremo provider '{PROVIDERS[state['provider_index']]}'")
+if total_saved == 0 or consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+    state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
+    state["page"] = 1  # Parte dalla pagina 1
+    logging.info(f"➡️ Prossima volta useremo provider '{PROVIDERS[state['provider_index']]}'")
 
 # --- Salva stato e guid ---
 with open(OFFSET_FILE, "w") as f:

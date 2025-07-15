@@ -1,15 +1,11 @@
 import os
 import time
-import io
-import requests
 from datetime import datetime
 
 import torch
-import pandas as pd
 import numpy as np
 
 from pyspark.sql import SparkSession
-from pyspark.sql.types import ArrayType, FloatType, StringType, StructType, StructField
 from pyspark.sql.functions import col
 
 from transformers import CLIPProcessor, CLIPModel
@@ -274,7 +270,7 @@ while True:
         time.sleep(SLEEP_SECONDS)
         continue
 
-    columns = ["guid", "title", "description", "type", "subject", "creator", "isShownBy"]
+    columns = ["guid", "image_url", "title", "description", "type", "subject", "creator"]
     pandas_df = df_new.select(*columns).toPandas()
     print(f"[INFO] Record da processare: {len(pandas_df)}")
 
@@ -306,7 +302,7 @@ while True:
         )
 
         # 3. Ora text_input è sicuro da passare al modello (mai più di 77 token)
-        image_url = row["isShownBy"]
+        image_url = row["image_url"]
         if isinstance(image_url, list):
             image_url = image_url[0] if len(image_url) > 0 else None
         elif isinstance(image_url, str) and image_url.startswith("[") and image_url.endswith("]"):
@@ -339,7 +335,7 @@ while True:
             emb_image = None
             
             records.append({
-                "id_object": guid,
+                "guid": guid,
                 "embedding_text": emb_text,
                 "embedding_image": emb_image,
                 "embedding_status": embedding_status,
@@ -356,7 +352,7 @@ while True:
                 # Salva embedding_text, embedding_image in records[]
                 for i, batch_guid in enumerate(batch_guids):
                     records.append({
-                        "id_object": batch_guid,
+                        "guid": batch_guid,
                         "embedding_text": emb_texts[i].tolist(),
                         "embedding_image": emb_images[i].tolist(),
                         "embedding_status": "OK",
@@ -367,7 +363,7 @@ while True:
                 print(f"[BATCH] Errore nel batch, impostando status FAILED per tutti gli elementi")
                 for batch_guid in batch_guids:
                     records.append({
-                        "id_object": batch_guid,
+                        "guid": batch_guid,
                         "embedding_text": None,
                         "embedding_image": None,
                         "embedding_status": "FAILED",
@@ -391,7 +387,7 @@ while True:
             # Salva embedding_text, embedding_image in records[]
             for i, batch_guid in enumerate(batch_guids):
                 records.append({
-                    "id_object": batch_guid,
+                    "guid": batch_guid,
                     "embedding_text": emb_texts[i].tolist(),
                     "embedding_image": emb_images[i].tolist(),
                     "embedding_status": "OK",
@@ -402,7 +398,7 @@ while True:
             print(f"[BATCH] Errore nel batch finale, impostando status FAILED per tutti gli elementi")
             for batch_guid in batch_guids:
                 records.append({
-                    "id_object": batch_guid,
+                    "guid": batch_guid,
                     "embedding_text": None,
                     "embedding_image": None,
                     "embedding_status": "FAILED",
@@ -416,11 +412,11 @@ while True:
         points = []
         for rec in records:
             if rec["embedding_status"] == "OK":
-                point_id = sanitize_id(rec["id_object"])
+                point_id = sanitize_id(rec["guid"])
 
                 # Payload ridotto, senza embedding_text
                 payload = {
-                    "id_object": rec["id_object"],
+                    "guid": rec["guid"],
                     "status": "pending"
                 }
 
@@ -436,7 +432,7 @@ while True:
                     payload=payload  
                 ))
             else:
-                print(f"[SKIP] Skipping {rec['id_object']} with status {rec['embedding_status']}")
+                print(f"[SKIP] Skipping {rec['guid']} with status {rec['embedding_status']}")
 
         try:
             qdrant.upsert(collection_name=COLLECTION_NAME, points=points)

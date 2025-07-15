@@ -1,11 +1,9 @@
 # kafka_europeana_metadata_to_minio.py
 #script di matteo che prende i dati da kafka e li scrive su delta lake con spark
 
-import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 import traceback
-import time
 from pyspark.sql.types import StructType, StringType, ArrayType
 import json
 import uuid
@@ -29,7 +27,7 @@ schema = StructType() \
     .add("format", StringType()) \
     .add("rights", StringType()) \
     .add("dataProvider", StringType()) \
-    .add("isShownBy", StringType()) \
+    .add("isShownAt", StringType()) \
     .add("edm_rights", StringType())
 
 spark = None
@@ -65,10 +63,6 @@ try:
 
 
     print("📥 Connessione a Kafka stabilita, topic: europeana_metadata")
-# cambiare questa riga per 3 brokers!!! (kafka3)
-# .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093,kafka3:9094") \
-# .option("kafka.bootstrap.servers", "kafka:9092,kafka2:9093")
-
 
 
 # Parsing JSON

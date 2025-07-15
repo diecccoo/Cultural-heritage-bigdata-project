@@ -13,10 +13,6 @@ spark = (SparkSession.builder
     .appName("UserAnnotationsProducer")
     .config("spark.jars.packages",
               "io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4")
-      # (facoltativo) abilitazione estensioni Delta
-      # .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
-      # .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-      # MinIO / S3A
       .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")
       .config("spark.hadoop.fs.s3a.access.key", "minio")
       .config("spark.hadoop.fs.s3a.secret.key", "minio123")
@@ -46,7 +42,8 @@ user_ids =[f"user{i:04d}" for i in range(1, 401)] + [
     "curator42", "historybuff", "artexpert", "randomnick", "user_xyz",
     "artefatto90", "louvrefan", "duomofreak", "restauratore75", "collezionista33",
     "historygeek", "antiquarian", "culturalbuff", "docentX", "digitalcurator", "pippo",
-    "pluto", "paperino", "mickeymouse", "donaldduck", "pippofranco",
+    "pluto", "paperino", "mickeymouse", "donaldduck", "pippofranco", "marco", "franco", "andrea",
+    "laura", "sara", "elisa", "giovanni", "gianni morandi", "nathan", "francesca2", "filippo"
 ]
 
 tags_pool = [
@@ -71,7 +68,7 @@ comments_pool = [
     "Forse parte di un trittico perduto.", "Stile influenzato dal gotico tedesco.",
     "Utilizzo di pigmenti naturali evidente.", "Forma inconsueta rispetto all'epoca.",
     "Tracce di pittura sovrapposta.", "Restauro moderno visibile sul lato sinistro."
-] + [f"Commento simulato n. {i}" for i in range(130)] + ["Amazing detail on this sculpture.",
+] + [f"Simulated comment n. {i}" for i in range(130)] + ["Amazing detail on this sculpture.",
     "Looks like late Baroque style.", "Still vibrant after all these years.",
     "Possibly restored in recent decades.","One of the most beautiful pieces I've seen.",
     "Looks like it's been part of a larger altar.","Very expressive facial features.",
@@ -125,7 +122,7 @@ comments_pool = [
     "Minimal wear considering the age.",    "Likely used in a religious festival.",
     "The eyes seem to follow you.",    "Amazing preservation of pigment.",
     "Detailing on the garment is insane.",    "Wish there was more info about this.",
-    "This belongs in the spotlight."]
+    "This belongs in the spotlight.", "looking very good very nice", "awww", "it reminds me of my grandma"]
 
 locations_pool = [
     "Rome", "Florence", "Venice", "Milan", "Naples", "Turin", "Palermo", "Bologna", "Genoa",
@@ -147,7 +144,7 @@ producer = KafkaProducer(
 
 while True:
     annotation = {
-        "object_id": random.choice(guids),
+        "guid": random.choice(guids),
         "user_id": random.choice(user_ids),
         "tags": random.sample(tags_pool, k=random.randint(2, 4)),
         "comment": random.choice(comments_pool),
@@ -156,4 +153,4 @@ while True:
     }
     producer.send(KAFKA_TOPIC, annotation)
     print("Pubblicata:", annotation)
-    time.sleep(2)  # Attendi x secondi tra le pubblicazioni
+    time.sleep(0.5)  # Attendi x secondi tra le pubblicazioni

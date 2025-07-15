@@ -1,4 +1,3 @@
-import os
 import time
 import uuid
 from datetime import datetime
@@ -6,7 +5,6 @@ from typing import List, Optional, Dict, Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue, ScrollRequest, NamedVector
-from qdrant_client.http.exceptions import UnexpectedResponse
 from tqdm import tqdm
 
 import numpy as np
@@ -16,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # ========== CONFIGURAZIONE ==========
 COLLECTION_NAME = "heritage_embeddings"
 BATCH_SIZE = 100  # Numero di punti da processare per batch
-SIMILARITY_THRESHOLD = 0.99  # Soglia di similarità per la deduplicazione
+SIMILARITY_THRESHOLD = 0.95  # Soglia di similarità per la deduplicazione
 SLEEP_SECONDS = 5  # Secondi di attesa tra i batch
 MAX_SEARCH_RESULTS = 1000  # Massimo numero di risultati per ricerca similarity
 
@@ -111,12 +109,13 @@ def search_similar_validated_points_fallback(image_embedding: List[float], limit
         while True:
             response = client.scroll(
                 collection_name=COLLECTION_NAME,
-                scroll_filter=scroll_request.filter,
-                limit=scroll_request.limit,
+                scroll_filter=filter_condition,
+                limit=limit,
                 offset=offset,
-                with_payload=scroll_request.with_payload,
-                with_vectors=scroll_request.with_vectors
+                with_payload=True,
+                with_vectors=True
             )
+
             
             points = response[0] if response else []
             offset = response[1] if len(response) > 1 else None

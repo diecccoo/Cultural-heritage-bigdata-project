@@ -5,7 +5,7 @@
 # Scrive i dati puliti in formato Delta su MinIO
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, when, lit
 
 # ---------------- SparkSession configurata per MinIO + Delta ----------------
 spark = SparkSession.builder \
@@ -30,10 +30,23 @@ print(f"📊 Numero record letti: {df.count()}")
 # ---------------- Data cleansing ----------------
 df_clean = df \
     .filter(col("guid").isNotNull()) \
-    .filter(col("isShownBy").isNotNull()) \
+    .filter(col("image_url").isNotNull()) \
     .dropDuplicates(["guid"])
 print(f"🧹 Numero record dopo cleaning: {df_clean.count()}")
 print("💾 Scrittura in formato Delta su MinIO...")
+
+#  trasforma anche le stringhe vuote "" in null.
+fields_to_clean = [
+    "title", "description", "timestamp_created", "provider","creator", "subject", "language", "type",
+    "format", "rights", "dataProvider", "isShownAt", "edm_rights"
+]
+
+for field in fields_to_clean:
+    df_clean = df_clean.withColumn(
+        field,
+        when(col(field) == "", lit(None)).otherwise(col(field))
+    )
+
 # ---------------- Scrittura in formato Delta ----------------
 df_clean.write \
     .format("delta") \

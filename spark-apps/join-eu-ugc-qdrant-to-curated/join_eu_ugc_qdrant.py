@@ -25,7 +25,7 @@ RELOAD_QDRANT_MIN = 1
 def get_validated_ids_from_qdrant():
     """
     Query Qdrant for all points with status = 'validated'.
-    Return a set of unique id_object from the first point of each canonical_id group.
+    Return a set of unique guid from the first point of each canonical_id group.
     """
     print("[DEBUG] Connessione a Qdrant e recupero punti 'validated'...")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=20)
@@ -54,15 +54,15 @@ def get_validated_ids_from_qdrant():
     points_data = [point.payload for point in results if point.payload]
     df = pd.DataFrame(points_data)
 
-    # Raggruppa per canonical_id e prendi il primo id_object
-    if 'canonical_id' not in df.columns or 'id_object' not in df.columns:
-        print("[DEBUG WARN] Campi canonical_id o id_object non trovati nei payload Qdrant.")
+    # Raggruppa per canonical_id e prendi il primo guid
+    if 'canonical_id' not in df.columns or 'guid' not in df.columns:
+        print("[DEBUG WARN] Campi canonical_id o guid non trovati nei payload Qdrant.")
         return set()
 
     grouped = df.groupby("canonical_id").first().reset_index()
-    validated_ids = set(grouped["id_object"].tolist())
-    print(f"[DEBUG] Totale id_object deduplicati (un per canonical_id): {len(validated_ids)}")
-    print("[DEBUG] Esempi di id_object da Qdrant (primi 10):")
+    validated_ids = set(grouped["guid"].tolist())
+    print(f"[DEBUG] Totale guid deduplicati (un per canonical_id): {len(validated_ids)}")
+    print("[DEBUG] Esempi di guid da Qdrant (primi 10):")
     for id_ in list(validated_ids)[:10]:
         print(f" - {id_}")
     return validated_ids
@@ -145,7 +145,6 @@ while True:
     ugc_df = spark.read.format("delta").load(UGC_PATH)
     if latest_ts:
         ugc_df = ugc_df.filter(col("timestamp") > lit(latest_ts))
-    ugc_df = ugc_df.withColumnRenamed("object_id", "guid")
     
     try:
         if ugc_df.rdd.isEmpty():

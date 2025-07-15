@@ -24,7 +24,7 @@ SOURCE_NAME = "kafka:user_annotations"
 
 # === SCHEMA DEI DATI JSON ALL'INTERNO DI "value" ===
 ugc_schema = StructType([
-    StructField("object_id", StringType(), True),
+    StructField("guid", StringType(), True),
     StructField("user_id", StringType(), True),
     StructField("tags", ArrayType(StringType()), True),
     StructField("comment", StringType(), True),
@@ -51,8 +51,8 @@ df_parsed = (
 print("[INFO] Parsing completato. Ecco lo schema del dataframe:")
 df_parsed.printSchema()
 
-# === RIMOZIONE DUPLICATI (object_id + timestamp) ===
-df_dedup = df_parsed.dropDuplicates(["object_id", "user_id", "comment", "timestamp"])
+# === RIMOZIONE DUPLICATI (guid + timestamp) ===
+df_dedup = df_parsed.dropDuplicates(["guid", "user_id", "comment", "timestamp"])
 # annotazioni duplicate (magari per errore di rete, replay Kafka, ecc.) vengono dallo stesso utente, nello stesso istante
 
 # === SCRITTURA IN DELTA FORMAT CON COALESCE(1) ===
