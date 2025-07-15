@@ -4,11 +4,12 @@ from qdrant_client import QdrantClient
 import pandas as pd
 from typing import List, Dict, Optional, Tuple
 import logging
+from qdrant_client.models import NamedVector # <--- AGGIUNGI QUESTA RIGA
+
 
 # Configurazione logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s') # Aggiunto format per più dettagli
 logger = logging.getLogger(__name__)
-
 # Configurazione database
 DB_CONFIG = {
     'host': 'postgres',
@@ -44,10 +45,15 @@ def get_qdrant_client():
     """Crea client Qdrant"""
     try:
         client = QdrantClient(host=QDRANT_CONFIG['host'], port=QDRANT_CONFIG['port'])
+        # Aggiungi un test per la connessione, ad esempio provando a listare le collezioni
+        client.get_collections() 
+        logger.info("Connessione a Qdrant stabilita con successo.")
         return client
     except Exception as e:
+        logger.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}") # Usa logger.error qui
         st.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
         return None
+
 
 def get_image_url(image_url_array: List[str], is_shown_by_array: List[str]) -> str:
     """Ottiene il primo URL di immagine valido o placeholder"""
@@ -290,16 +296,18 @@ def get_recommendations(object_id: str) -> List[Dict]:
     """Ottiene raccomandazioni simili da Qdrant"""
     client = get_qdrant_client()
     if not client:
+        logger.warning("Client Qdrant non disponibile, impossibile ottenere raccomandazioni.")
         return []
     
     try:
         # Ricerca vettore dell'oggetto corrente
+        logger.info(f"Cercando vettore per object_id (che è guid): {object_id} in Qdrant.")
         search_result = client.scroll(
             collection_name="heritage_embeddings",
             scroll_filter={
                 "must": [
                     {
-                        "key": "id_object",
+                        "key": "guid", # Campo corretto
                         "match": {"value": object_id}
                     }
                 ]
@@ -309,43 +317,66 @@ def get_recommendations(object_id: str) -> List[Dict]:
         )
         
         if not search_result[0]:
+            logger.warning(f"Nessun vettore trovato in Qdrant per object_id (guid): {object_id}")
             return []
         
-        # Ottieni vettore dell'oggetto
-        current_vector = search_result[0][0].vector["combined"]
+        # Ottieni i vettori nominati dall'oggetto corrente
+        current_named_vectors = search_result[0][0].vector # Questo sarà un dizionario come {"combined": [...], "image": [...]}
+        
+        # Seleziona il vettore specifico da usare per la query (es. "combined")
+        query_vector_data = current_named_vectors.get("combined")
+        
+        if query_vector_data is None:
+            logger.error("Vettore 'combined' non trovato per l'oggetto corrente. Impossibile cercare raccomandazioni.")
+            return []
+
+        logger.info(f"Vettore trovato per object_id (guid): {object_id}. Inizio ricerca oggetti simili.")
         
         # Ricerca oggetti simili
         similar_results = client.search(
             collection_name="heritage_embeddings",
-            query_vector=current_vector,
+            # Modifica qui: crea un'istanza di NamedVector
+            query_vector=NamedVector(
+                name="combined", # Specifica il nome del vettore
+                vector=query_vector_data # Passa i dati del vettore
+            ),
             limit=11,  # 10 + 1 (oggetto corrente)
-            score_threshold=0.75
+            score_threshold=0.75,
+            append_payload=True
         )
         
         # Filtra oggetto corrente e ottieni ID
-        similar_ids = [
-            result.payload["id_object"] 
-            for result in similar_results 
-            if result.payload["id_object"] != object_id
-        ][:10]
+        similar_ids = []
+        for result in similar_results:
+            # Assicurati che 'payload' e 'guid' esistano nel risultato prima di accedervi
+            if result.payload and "guid" in result.payload and result.payload["guid"] != object_id:
+                similar_ids.append(result.payload["guid"])
         
+        similar_ids = similar_ids[:10]
+        
+        logger.info(f"Trovati {len(similar_ids)} ID oggetti simili: {similar_ids}")
+
         # Ottieni metadati da PostgreSQL
         if similar_ids:
             conn = get_db_connection()
             if conn:
                 cursor = conn.cursor()
                 placeholders = ','.join(['%s'] * len(similar_ids))
-                query = f"SELECT * FROM join_metadata_deduplicated WHERE id_object IN ({placeholders})"
+                # La query dovrebbe essere corretta se 'id_object' in PostgreSQL corrisponde a 'guid' in Qdrant
+                query = f"SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE id_object IN ({placeholders}) ORDER BY id_object, id"
                 cursor.execute(query, similar_ids)
                 
                 columns = [desc[0] for desc in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
                 cursor.close()
+                logger.info(f"Recuperati {len(results)} metadati per oggetti simili da PostgreSQL.")
                 return results
         
+        logger.info("Nessun ID oggetto simile da recuperare o connessione DB fallita.")
         return []
         
     except Exception as e:
+        logger.error(f"Errore nel recupero raccomandazioni: {str(e)}")
         st.error(f"Errore nel recupero raccomandazioni: {str(e)}")
         return []
 
@@ -530,9 +561,16 @@ def render_detail_view():
 
         all_annotations = get_all_annotations_for_object(object_id)
 
-        if all_annotations:
+        # Filtra le annotazioni per includere solo quelle che hanno almeno un campo significativo
+        # (comment, user_id, o tags con almeno un elemento)
+        meaningful_annotations = [
+            ann for ann in all_annotations
+            if ann.get('comment') or ann.get('user_id') or (ann.get('tags') and len(ann['tags']) > 0)
+        ]
+
+        if meaningful_annotations:
             # Per ogni annotazione trovata, mostra i suoi dettagli
-            for i, annotation in enumerate(all_annotations):
+            for i, annotation in enumerate(meaningful_annotations):
                 st.markdown(f"---") # Separatore per chiarezza
                 st.write(f"**Annotazione #{i+1}**")
                 if annotation.get('user_id'):
@@ -574,7 +612,6 @@ def render_detail_view():
                             st.experimental_rerun()
     else:
         st.info("Raccomandazioni non disponibili")
-
         
 def initialize_session_state():
     """Inizializza session state"""
