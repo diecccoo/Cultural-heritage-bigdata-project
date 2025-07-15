@@ -1,12 +1,10 @@
 CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     id SERIAL PRIMARY KEY,
-    id_object TEXT,
+    guid TEXT,
     user_id TEXT,
     tags TEXT[],
     comment TEXT,
     timestamp TIMESTAMP,
-    location TEXT,
-    ingestion_time_ugc TIMESTAMP,
     source TEXT,
     creator TEXT,
     description TEXT,
@@ -16,24 +14,19 @@ CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     isshownby TEXT[],
     language TEXT,
     provider TEXT,
-    rights TEXT,
     subject TEXT[],
-    timestamp_created_europeana TIMESTAMP,
     title TEXT,
-    type TEXT,
-    joined_at TIMESTAMP
+    type TEXT
 );
 
 -- Copia identica per staging
 CREATE TABLE IF NOT EXISTS join_metadata_staging (
     id SERIAL PRIMARY KEY,
-    id_object TEXT,
+    guid TEXT,
     user_id TEXT,
     tags TEXT[],
     comment TEXT,
     timestamp TIMESTAMP,
-    location TEXT,
-    ingestion_time_ugc TIMESTAMP,
     source TEXT,
     creator TEXT,
     description TEXT,
@@ -43,10 +36,7 @@ CREATE TABLE IF NOT EXISTS join_metadata_staging (
     isshownby TEXT[],
     language TEXT,
     provider TEXT,
-    rights TEXT,
     subject TEXT[],
-    timestamp_created_europeana TIMESTAMP,
     title TEXT,
-    type TEXT,
-    joined_at TIMESTAMP
+    type TEXT
 );

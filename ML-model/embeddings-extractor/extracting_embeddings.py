@@ -25,10 +25,10 @@ CLEANSED_PATH = "s3a://heritage/cleansed/europeana/"
 EMBEDDING_PATH = "s3a://heritage/cleansed/embeddings/"
 STATE_FILE_PATH = "s3a://heritage/cleansed/embedding_last_processed.txt"
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
-SLEEP_SECONDS = 45
+SLEEP_SECONDS = 20
 
 # ========== NUOVE CONFIGURAZIONI ==========
-LIMIT_RECORDS = 112  # Limita i record per ciclo Spark (gestione RAM)
+LIMIT_RECORDS = 48  # Limita i record per ciclo Spark (gestione RAM)
 BATCH_SIZE = 16      # Batch size per embedding CLIP
 
 # ========== INIZIALIZZA SPARK ==========

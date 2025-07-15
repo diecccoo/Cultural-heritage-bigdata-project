@@ -30,13 +30,11 @@ try:
 
     # Seleziona TUTTI i 23 campi richiesti
     df_mapped = df.select(
-        col("guid").alias("id_object"),
+        col("guid"),
         col("user_id"),
         col("tags"),
         col("comment"),
         to_timestamp("timestamp").alias("timestamp"),
-        col("location"),
-        to_timestamp("ingestion_time").alias("ingestion_time_ugc"),
         col("source"),
         col("creator"),
         col("description"),
@@ -45,12 +43,9 @@ try:
         col("image_url"),
         col("language"),
         col("provider"),
-        col("rights"),
         col("subject"),
-        to_timestamp("timestamp_created").alias("timestamp_created_europeana"),
         col("title"),
-        col("type"),
-        to_timestamp("joined_at").alias("joined_at")
+        col("type")
     )
 
 
@@ -100,18 +95,17 @@ try:
     cur.execute("TRUNCATE TABLE join_metadata_deduplicated;")
     cur.execute("""
         INSERT INTO join_metadata_deduplicated (
-            id_object, user_id, tags, comment, timestamp, location,
-            ingestion_time_ugc, source, creator,
+            guid, user_id, tags, comment, timestamp, source, creator,
             description, edm_rights, format, image_url,
-            language, provider, rights, subject, timestamp_created_europeana,
-            title, type, joined_at
+            language, provider, subject,
+            title, type
         )
         SELECT 
-            id_object, user_id, tags, comment, timestamp, location,
-            ingestion_time_ugc, source, creator,
+            guid, user_id, tags, comment, timestamp,
+            source, creator,
             description, edm_rights, format, image_url,
-            language, provider, rights, subject, timestamp_created_europeana,
-            title, type, joined_at
+            language, provider, subject,
+            title, type
         FROM join_metadata_staging
     """)
 

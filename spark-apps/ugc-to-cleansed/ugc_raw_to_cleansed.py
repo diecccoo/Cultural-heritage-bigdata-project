@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, lit, current_timestamp
+from pyspark.sql.functions import col, from_json, lit, current_timestamp, max
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType
+
 
 # ---------------- SparkSession configurata per MinIO + Delta ----------------
 spark = SparkSession.builder \
@@ -32,6 +33,15 @@ ugc_schema = StructType([
     StructField("location", StringType(), True),
 ])
 
+# === CARICA TIMESTAMP MASSIMO GIA' SCRITTO ===
+try:
+    df_existing = spark.read.format("delta").load(CLEANSED_PATH)
+    last_ts = df_existing.select(max("timestamp_cleansed")).first()[0]
+    print(f"[INFO] Ultimo timestamp_cleansed presente in Delta: {last_ts}")
+except Exception as e:
+    last_ts = None
+    print(f"[INFO] Nessun file Delta trovato, procedo da zero: {e}")
+
 # === LETTURA DATI GREZZI ===
 print("[INFO] Inizio lettura dei file JSON dal raw layer...")
 df_raw = spark.read.json(RAW_PATH)
@@ -48,24 +58,32 @@ df_parsed = (
     )
 )
 
-print("[INFO] Parsing completato. Ecco lo schema del dataframe:")
-df_parsed.printSchema()
+# === FILTRO SUI NUOVI DATI ===
+if last_ts:
+    df_filtered = df_parsed.filter(col("ingestion_time") > lit(last_ts))
+else:
+    df_filtered = df_parsed
 
+
+df_filtered = df_filtered.withColumn("timestamp_cleansed", current_timestamp())
 # === RIMOZIONE DUPLICATI (guid + timestamp) ===
-df_dedup = df_parsed.dropDuplicates(["guid", "user_id", "comment", "timestamp"])
+df_dedup = df_filtered.dropDuplicates(["guid", "user_id", "comment", "timestamp"])
 # annotazioni duplicate (magari per errore di rete, replay Kafka, ecc.) vengono dallo stesso utente, nello stesso istante
 
 # === SCRITTURA IN DELTA FORMAT CON COALESCE(1) ===
-print("[INFO] Scrittura del dataframe in formato Delta nel cleansed layer...")
-(
-    df_dedup
-    .coalesce(1)
-    .write
-    .format("delta")
-    .mode("append")
-    .option("compression", "snappy")
-    .save(CLEANSED_PATH)
-)
+count_new = df_dedup.count()
+if count_new > 0:
+    (
+        df_dedup
+        .coalesce(1)
+        .write
+        .format("delta")
+        .mode("append")
+        .option("compression", "snappy")
+        .save(CLEANSED_PATH)
+    )
+    print(f"[✅] Scritti {count_new} nuovi record in cleansed.")
+else:
+    print("[🟡] Nessun nuovo record da scrivere.")
 
-print("[INFO] Job completato con successo.")
 spark.stop()

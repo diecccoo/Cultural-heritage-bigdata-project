@@ -6,10 +6,17 @@ from typing import List, Dict, Optional, Tuple
 import logging
 from qdrant_client.models import NamedVector # <--- AGGIUNGI QUESTA RIGA
 
-
 # Configurazione logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s') # Aggiunto format per più dettagli
 logger = logging.getLogger(__name__)
+
+# aggiungo flag per tenere traccia se è stato mostrato un errore di connessione principale per prevenire visualizzazione
+# ripetuta di errori o tentativi di log ricorsivi
+if 'db_conn_error_shown' not in st.session_state:
+    st.session_state.db_conn_error_shown = False
+if 'qdrant_conn_error_shown' not in st.session_state:
+    st.session_state.qdrant_conn_error_shown = False
+
 # Configurazione database
 DB_CONFIG = {
     'host': 'postgres',
@@ -30,14 +37,20 @@ PAGE_SIZE = 20
 MAX_RESULTS = 60
 PLACEHOLDER_IMAGE = "https://via.placeholder.com/300?text=Non+trovata"
 
+
 @st.cache_resource
 def get_db_connection():
     """Crea connessione al database PostgreSQL"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
+        st.session_state.db_conn_error_shown = False # Resetta il flag se la connessione ha successo
         return conn
     except Exception as e:
-        st.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
+        # Solo loggare/mostrare l'errore una volta o con un limite
+        if not st.session_state.db_conn_error_shown:
+            logger.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
+            st.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
+            st.session_state.db_conn_error_shown = True # Imposta il flag a True
         return None
 
 @st.cache_resource
@@ -45,15 +58,16 @@ def get_qdrant_client():
     """Crea client Qdrant"""
     try:
         client = QdrantClient(host=QDRANT_CONFIG['host'], port=QDRANT_CONFIG['port'])
-        # Aggiungi un test per la connessione, ad esempio provando a listare le collezioni
         client.get_collections() 
         logger.info("Connessione a Qdrant stabilita con successo.")
+        st.session_state.qdrant_conn_error_shown = False # Resetta il flag se la connessione ha successo
         return client
     except Exception as e:
-        logger.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}") # Usa logger.error qui
-        st.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
+        if not st.session_state.qdrant_conn_error_shown:
+            logger.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
+            st.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
+            st.session_state.qdrant_conn_error_shown = True # Imposta il flag a True
         return None
-
 
 def get_image_url(image_url_array: List[str], is_shown_by_array: List[str]) -> str:
     """Ottiene il primo URL di immagine valido o placeholder"""
@@ -98,8 +112,9 @@ def get_filter_options() -> Dict[str, List[str]]:
         st.error(f"Errore nel caricamento filtri: {str(e)}")
         return {}
 
-def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
-    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per id_object."""
+    
+def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
+    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per guid."""
     conn = get_db_connection()
     if not conn:
         return [], 0
@@ -107,12 +122,12 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
     try:
         cursor = conn.cursor()
 
-        # Usiamo DISTINCT ON (id_object) per prendere solo una riga per ogni id_object
-        # e ordiniamo per id_object per una consistenza nella selezione del "primo" duplicato
+        # Usiamo DISTINCT ON (guid) per prendere solo una riga per ogni guid
+        # e ordiniamo per guid per una consistenza nella selezione del "primo" duplicato
         # Inseriamo l'ordinamento anche all'interno del DISTINCT ON per determinare quale riga viene selezionata
         # E poi un secondo ORDER BY per la paginazione, che può essere lo stesso.
 
-        query_base = "SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        query_base = "SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
         params = []
 
         # Aggiunta filtri
@@ -132,8 +147,8 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
             query_base += " AND tags && %s"
             params.append(filters['tags'])
 
-        # Per il conteggio totale, dobbiamo contare gli id_object distinti dopo i filtri
-        count_query = f"SELECT COUNT(DISTINCT id_object) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        # Per il conteggio totale, dobbiamo contare gli guid distinti dopo i filtri
+        count_query = f"SELECT COUNT(DISTINCT guid) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
         count_params = []
         if filters.get('creator'):
             count_query += " AND creator = %s"
@@ -158,7 +173,7 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
         # Query paginata
         # Aggiungiamo un ORDER BY per garantire la consistenza di DISTINCT ON
         # e un secondo ORDER BY per la paginazione
-        query_paginated = f"{query_base} ORDER BY id_object, id LIMIT %s OFFSET %s" # Ordina per id_object e poi per id (l'ID univoco dell'annotazione)
+        query_paginated = f"{query_base} ORDER BY guid, id LIMIT %s OFFSET %s" # Ordina per guid e poi per id (l'ID univoco dell'annotazione)
         params.extend([page_size, (page - 1) * page_size])
 
         cursor.execute(query_paginated, params)
@@ -172,81 +187,7 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
         st.error(f"Errore nella ricerca: {str(e)}")
         return [], 0
     
-def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
-    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per id_object."""
-    conn = get_db_connection()
-    if not conn:
-        return [], 0
-
-    try:
-        cursor = conn.cursor()
-
-        # Usiamo DISTINCT ON (id_object) per prendere solo una riga per ogni id_object
-        # e ordiniamo per id_object per una consistenza nella selezione del "primo" duplicato
-        # Inseriamo l'ordinamento anche all'interno del DISTINCT ON per determinare quale riga viene selezionata
-        # E poi un secondo ORDER BY per la paginazione, che può essere lo stesso.
-
-        query_base = "SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
-        params = []
-
-        # Aggiunta filtri
-        if filters.get('creator'):
-            query_base += " AND creator = %s"
-            params.append(filters['creator'])
-
-        if filters.get('type'):
-            query_base += " AND type = %s"
-            params.append(filters['type'])
-
-        if filters.get('subjects'):
-            query_base += " AND subject && %s"
-            params.append(filters['subjects'])
-
-        if filters.get('tags'):
-            query_base += " AND tags && %s"
-            params.append(filters['tags'])
-
-        # Per il conteggio totale, dobbiamo contare gli id_object distinti dopo i filtri
-        count_query = f"SELECT COUNT(DISTINCT id_object) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
-        count_params = []
-        if filters.get('creator'):
-            count_query += " AND creator = %s"
-            count_params.append(filters['creator'])
-        if filters.get('type'):
-            count_query += " AND type = %s"
-            count_params.append(filters['type'])
-        if filters.get('subjects'):
-            count_query += " AND subject && %s"
-            count_params.append(filters['subjects'])
-        if filters.get('tags'):
-            count_query += " AND tags && %s"
-            count_params.append(filters['tags'])
-
-
-        cursor.execute(count_query, count_params)
-        total_count = cursor.fetchone()[0]
-
-        # Limitazione risultati
-        total_count = min(total_count, MAX_RESULTS)
-
-        # Query paginata
-        # Aggiungiamo un ORDER BY per garantire la consistenza di DISTINCT ON
-        # e un secondo ORDER BY per la paginazione
-        query_paginated = f"{query_base} ORDER BY id_object, id LIMIT %s OFFSET %s" # Ordina per id_object e poi per id (l'ID univoco dell'annotazione)
-        params.extend([page_size, (page - 1) * page_size])
-
-        cursor.execute(query_paginated, params)
-        columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-        cursor.close()
-        return results, total_count
-
-    except Exception as e:
-        st.error(f"Errore nella ricerca: {str(e)}")
-        return [], 0
-    
-def get_object_details(object_id: str) -> Optional[Dict]:
+def get_guid_details(guid: str) -> Optional[Dict]:
     """Ottiene dettagli di un singolo oggetto"""
     conn = get_db_connection()
     if not conn:
@@ -254,7 +195,7 @@ def get_object_details(object_id: str) -> Optional[Dict]:
     
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE id_object = %s", (object_id,))
+        cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE guid = %s", (guid,))
         
         columns = [desc[0] for desc in cursor.description]
         row = cursor.fetchone()
@@ -271,16 +212,16 @@ def get_object_details(object_id: str) -> Optional[Dict]:
         st.error(f"Errore nel recupero dettagli: {str(e)}")
         return None
 
-def get_all_annotations_for_object(object_id: str) -> List[Dict]:
-    """Ottiene tutte le annotazioni (righe) per un dato id_object."""
+def get_all_annotations_for_guid(guid: str) -> List[Dict]:
+    """Ottiene tutte le annotazioni (righe) per un dato guid."""
     conn = get_db_connection()
     if not conn:
         return []
 
     try:
         cursor = conn.cursor()
-        # Seleziona tutte le righe che hanno lo stesso id_object
-        cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE id_object = %s ORDER BY timestamp DESC", (object_id,))
+        # Seleziona tutte le righe che hanno lo stesso guid
+        cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE guid = %s ORDER BY timestamp DESC", (guid,))
 
         columns = [desc[0] for desc in cursor.description]
         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -292,7 +233,7 @@ def get_all_annotations_for_object(object_id: str) -> List[Dict]:
         st.error(f"Errore nel recupero di tutte le annotazioni per l'oggetto: {str(e)}")
         return []
 
-def get_recommendations(object_id: str) -> List[Dict]:
+def get_recommendations(guid: str) -> List[Dict]:
     """Ottiene raccomandazioni simili da Qdrant"""
     client = get_qdrant_client()
     if not client:
@@ -301,14 +242,14 @@ def get_recommendations(object_id: str) -> List[Dict]:
     
     try:
         # Ricerca vettore dell'oggetto corrente
-        logger.info(f"Cercando vettore per object_id (che è guid): {object_id} in Qdrant.")
+        logger.info(f"Cercando vettore per guid (che è guid): {guid} in Qdrant.")
         search_result = client.scroll(
             collection_name="heritage_embeddings",
             scroll_filter={
                 "must": [
                     {
                         "key": "guid", # Campo corretto
-                        "match": {"value": object_id}
+                        "match": {"value": guid}
                     }
                 ]
             },
@@ -317,7 +258,7 @@ def get_recommendations(object_id: str) -> List[Dict]:
         )
         
         if not search_result[0]:
-            logger.warning(f"Nessun vettore trovato in Qdrant per object_id (guid): {object_id}")
+            logger.warning(f"Nessun vettore trovato in Qdrant per guid (guid): {guid}")
             return []
         
         # Ottieni i vettori nominati dall'oggetto corrente
@@ -330,7 +271,7 @@ def get_recommendations(object_id: str) -> List[Dict]:
             logger.error("Vettore 'combined' non trovato per l'oggetto corrente. Impossibile cercare raccomandazioni.")
             return []
 
-        logger.info(f"Vettore trovato per object_id (guid): {object_id}. Inizio ricerca oggetti simili.")
+        logger.info(f"Vettore trovato per guid (guid): {guid}. Inizio ricerca oggetti simili.")
         
         # Ricerca oggetti simili
         similar_results = client.search(
@@ -349,7 +290,7 @@ def get_recommendations(object_id: str) -> List[Dict]:
         similar_ids = []
         for result in similar_results:
             # Assicurati che 'payload' e 'guid' esistano nel risultato prima di accedervi
-            if result.payload and "guid" in result.payload and result.payload["guid"] != object_id:
+            if result.payload and "guid" in result.payload and result.payload["guid"] != guid:
                 similar_ids.append(result.payload["guid"])
         
         similar_ids = similar_ids[:10]
@@ -362,8 +303,8 @@ def get_recommendations(object_id: str) -> List[Dict]:
             if conn:
                 cursor = conn.cursor()
                 placeholders = ','.join(['%s'] * len(similar_ids))
-                # La query dovrebbe essere corretta se 'id_object' in PostgreSQL corrisponde a 'guid' in Qdrant
-                query = f"SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE id_object IN ({placeholders}) ORDER BY id_object, id"
+                # La query dovrebbe essere corretta se 'guid' in PostgreSQL corrisponde a 'guid' in Qdrant
+                query = f"SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE guid IN ({placeholders}) ORDER BY guid, id"
                 cursor.execute(query, similar_ids)
                 
                 columns = [desc[0] for desc in cursor.description]
@@ -390,14 +331,23 @@ def render_gallery_view():
 
     # Sidebar con filtri
     with st.sidebar:
-        st.header("🔍 Filtri")
+        st.header("🔍 Filters")
 
         # Creator dropdown
+        # Calcola l'indice iniziale per il selectbox del Creator
+        try:
+            # Tenta di trovare l'indice del valore selezionato nella lista delle opzioni reali
+            # e aggiungi 1 perché [None] è la prima opzione
+            current_creator_index = st.session_state.filter_options.get('creators', []).index(st.session_state.get('selected_creator')) + 1
+        except ValueError:
+            # Se il valore selezionato non è nella lista (es. è None), imposta l'indice a 0 (che è [None])
+            current_creator_index = 0
+
         selected_creator = st.selectbox(
             "Creator",
             options=[None] + st.session_state.filter_options.get('creators', []),
-            index=0 if not st.session_state.get('selected_creator') else
-                  st.session_state.filter_options.get('creators', []).index(st.session_state.selected_creator) + 1
+            index=current_creator_index, # Usa l'indice calcolato qui
+            key="creator_filter" # Aggiungi una chiave univoca per il widget
         )
 
         # Subject multiselect
@@ -408,11 +358,17 @@ def render_gallery_view():
         )
 
         # Type dropdown
+        # Calcola l'indice iniziale per il selectbox del Type
+        try:
+            current_type_index = st.session_state.filter_options.get('types', []).index(st.session_state.get('selected_type')) + 1
+        except ValueError:
+            current_type_index = 0
+
         selected_type = st.selectbox(
             "Type",
             options=[None] + st.session_state.filter_options.get('types', []),
-            index=0 if not st.session_state.get('selected_type') else
-                  st.session_state.filter_options.get('types', []).index(st.session_state.selected_type) + 1
+            index=current_type_index, # Usa l'indice calcolato qui
+            key="type_filter" # Aggiungi una chiave univoca per il widget
         )
 
         # Tags multiselect
@@ -429,7 +385,7 @@ def render_gallery_view():
             st.session_state.selected_type = None
             st.session_state.selected_tags = []
             st.session_state.current_page = 1
-            st.experimental_rerun()
+            st.rerun()
 
     # Aggiorna filtri in session state
     filters_changed = (
@@ -440,11 +396,18 @@ def render_gallery_view():
     )
 
     if filters_changed:
-        st.session_state.selected_creator = selected_creator
-        st.session_state.selected_subjects = selected_subjects
-        st.session_state.selected_type = selected_type
-        st.session_state.selected_tags = selected_tags
-        st.session_state.current_page = 1
+    # Evita rerun infiniti con un flag
+        if 'last_filter_rerun' not in st.session_state or not st.session_state.last_filter_rerun:
+            st.session_state.selected_creator = selected_creator
+            st.session_state.selected_subjects = selected_subjects
+            st.session_state.selected_type = selected_type
+            st.session_state.selected_tags = selected_tags
+            st.session_state.current_page = 1
+            st.session_state.last_filter_rerun = True
+            st.rerun()
+    else:
+        st.session_state.last_filter_rerun = False
+
 
     # Costruisci filtri per query
     filters = {}
@@ -459,7 +422,8 @@ def render_gallery_view():
 
     # Ricerca oggetti
     current_page = st.session_state.get('current_page', 1)
-    gallery_data, total_results = search_objects(filters, current_page)
+    with st.spinner("Caricamento risultati..."): # AGGIUNGI QUESTA RIGA
+        gallery_data, total_results = search_guids(filters, current_page)
 
     # Salva risultati in session state
     st.session_state.gallery_data = gallery_data
@@ -484,8 +448,8 @@ def render_gallery_view():
 
                         if st.button(f"📖 Dettagli", key=f"detail_{item['id']}"):
                             st.session_state.current_view = 'detail'
-                            st.session_state.current_object_id = item['id_object']
-                            st.experimental_rerun()
+                            st.session_state.current_guid = item['guid']
+                            st.rerun()
     # Paginazione
     max_pages = min(3, (total_results + PAGE_SIZE - 1) // PAGE_SIZE)
 
@@ -496,7 +460,7 @@ def render_gallery_view():
             if current_page > 1:
                 if st.button("⬅️ Precedente"):
                     st.session_state.current_page = current_page - 1
-                    st.experimental_rerun()
+                    st.rerun()
 
         with col2:
             st.write(f"Pagina {current_page} di {max_pages}")
@@ -505,20 +469,20 @@ def render_gallery_view():
             if current_page < max_pages:
                 if st.button("Successiva ➡️"):
                     st.session_state.current_page = current_page + 1
-                    st.experimental_rerun()
+                    st.rerun()
 
 def render_detail_view():
     """Renderizza la vista dettagli oggetto"""
     # Pulsante back
     if st.button("⬅️ Torna alla ricerca"):
         st.session_state.current_view = 'gallery'
-        st.experimental_rerun()
+        st.rerun()
 
-    # Ottieni dettagli oggetto (prenderà la riga "principale" con quel id_object)
-    object_id = st.session_state.current_object_id
-    object_data = get_object_details(object_id) # Questa funzione va bene così com'è
+    # Ottieni dettagli oggetto (prenderà la riga "principale" con quel guid)
+    guid = st.session_state.current_guid
+    guid_data = get_guid_details(guid) # Questa funzione va bene così com'è
 
-    if not object_data:
+    if not guid_data:
         st.error("Oggetto non trovato")
         return
 
@@ -527,12 +491,12 @@ def render_detail_view():
 
     with col_left:
         # Immagine principale
-        image_url = get_image_url(object_data.get('image_url', []), object_data.get('isShownBy', []))
+        image_url = get_image_url(guid_data.get('image_url', []), guid_data.get('isShownBy', []))
         st.image(image_url, use_column_width=True)
 
         # Caption con titolo
-        if object_data.get('title'):
-            st.caption(object_data['title'])
+        if guid_data.get('title'):
+            st.caption(guid_data['title'])
 
     with col_right:
         # Metadati Europeana
@@ -550,7 +514,7 @@ def render_detail_view():
         ]
 
         for label, field in metadata_fields:
-            value = object_data.get(field)
+            value = guid_data.get(field)
             if value:
                 if isinstance(value, list):
                     value = ', '.join(value)
@@ -559,7 +523,7 @@ def render_detail_view():
         # Sezione per TUTTE le annotazioni (commenti e tags)
         st.subheader("💬 Annotazioni Utente")
 
-        all_annotations = get_all_annotations_for_object(object_id)
+        all_annotations = get_all_annotations_for_guid(guid)
 
         # Filtra le annotazioni per includere solo quelle che hanno almeno un campo significativo
         # (comment, user_id, o tags con almeno un elemento)
@@ -593,7 +557,7 @@ def render_detail_view():
     # Sezione oggetti simili
     st.subheader("🔍 Oggetti simili")
 
-    recommendations = get_recommendations(object_id)
+    recommendations = get_recommendations(guid)
 
     if recommendations:
         # Griglia 5x2
@@ -608,8 +572,8 @@ def render_detail_view():
                     with col:
                         st.image(image_url, use_column_width=True)
                         if st.button(f"👁️", key=f"rec_{item['id']}"):
-                            st.session_state.current_object_id = item['id_object']
-                            st.experimental_rerun()
+                            st.session_state.current_guid = item['guid']
+                            st.rerun()
     else:
         st.info("Raccomandazioni non disponibili")
         

@@ -62,9 +62,9 @@ def get_validated_ids_from_qdrant():
     grouped = df.groupby("canonical_id").first().reset_index()
     validated_ids = set(grouped["guid"].tolist())
     print(f"[DEBUG] Totale guid deduplicati (un per canonical_id): {len(validated_ids)}")
-    print("[DEBUG] Esempi di guid da Qdrant (primi 10):")
-    for id_ in list(validated_ids)[:10]:
-        print(f" - {id_}")
+    # print("[DEBUG] Esempi di guid da Qdrant (primi 10):")
+    # for id_ in list(validated_ids)[:10]:
+    #     print(f" - {id_}")
     return validated_ids
 
 
@@ -125,13 +125,13 @@ while True:
     
     # Filtro Europeana su validated_ids da Qdrant
     filtered_europeana_df = europeana_df.filter(col("guid").isin(list(validated_ids)))
-    print("[DEBUG] Esempio metadati Europeana filtrati (guid, title se presente):")
-    if "title" in filtered_europeana_df.columns:
-        filtered_europeana_df.select("guid", "title").show(5, truncate=False)
-    else:
-        filtered_europeana_df.select("guid").show(5, truncate=False)
+    # print("[DEBUG] Esempio metadati Europeana filtrati (guid, title se presente):")
+    # if "title" in filtered_europeana_df.columns:
+    #     filtered_europeana_df.select("guid", "title").show(5, truncate=False)
+    # else:
+    #     filtered_europeana_df.select("guid").show(5, truncate=False)
 
-    print(f"[DEBUG] Lista guid filtrati da Qdrant: {validated_ids}")
+    # print(f"[DEBUG] Lista guid filtrati da Qdrant: {validated_ids}")
     print(f"[DEBUG] Europeana totali prima del filtro: {europeana_df.count()}")
     print(f"[DEBUG] Europeana filtrati dopo Qdrant: {filtered_europeana_df.count()}")
 
@@ -149,9 +149,9 @@ while True:
     try:
         if ugc_df.rdd.isEmpty():
             print("[DEBUG] UGC è vuoto: nessun dato da mostrare.")
-        else:
-            print("[DEBUG] Esempio valori UGC (guid, timestamp):")
-            ugc_df.select("guid", "timestamp").show(5, truncate=False)
+        # else:
+        #     print("[DEBUG] Esempio valori UGC (guid, timestamp):")
+        #     ugc_df.select("guid", "timestamp").show(5, truncate=False)
     except Exception as e:
         print(f"[DEBUG ERROR] Errore nel tentativo di mostrare UGC: {str(e)}")
 
