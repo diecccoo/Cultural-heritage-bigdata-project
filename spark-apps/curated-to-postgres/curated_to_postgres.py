@@ -25,7 +25,6 @@ try:
     log("Delta join_metadata_deduplicated caricata correttamente")
 
     df = df.withColumn("image_url", from_json("image_url", ArrayType(StringType())))
-    df = df.withColumn("isShownBy", from_json("isShownBy", ArrayType(StringType())))
     df = df.withColumn("subject", from_json("subject", ArrayType(StringType())))
 
 
@@ -44,7 +43,6 @@ try:
         col("edm_rights"),
         col("format"),
         col("image_url"),
-        col("isShownBy").alias("isshownby"),
         col("language"),
         col("provider"),
         col("rights"),
@@ -104,14 +102,14 @@ try:
         INSERT INTO join_metadata_deduplicated (
             id_object, user_id, tags, comment, timestamp, location,
             ingestion_time_ugc, source, creator,
-            description, edm_rights, format, image_url, isshownby,
+            description, edm_rights, format, image_url,
             language, provider, rights, subject, timestamp_created_europeana,
             title, type, joined_at
         )
         SELECT 
             id_object, user_id, tags, comment, timestamp, location,
             ingestion_time_ugc, source, creator,
-            description, edm_rights, format, image_url, isshownby,
+            description, edm_rights, format, image_url,
             language, provider, rights, subject, timestamp_created_europeana,
             title, type, joined_at
         FROM join_metadata_staging

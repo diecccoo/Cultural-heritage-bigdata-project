@@ -1,20 +1,12 @@
-import requests
+from qdrant_client import QdrantClient
 
-url = "http://localhost:6333/collections/heritage_embeddings/points/scroll"
-payload = {
-    "limit": 100
-}
-headers = {
-    "Content-Type": "application/json"
-}
+# Connetti al servizio Qdrant
+client = QdrantClient(url="http://localhost:6333")
 
-response = requests.post(url, json=payload, headers=headers)
-points = response.json()["result"]["points"]
+# Conta TUTTI i punti nella collezione (exact=True per conteggio preciso)
+count_result = client.count(
+    collection_name="heritage_embeddings",
+    exact=True
+)
 
-for p in points:
-    payload = p.get("payload", {})
-    status = payload.get("status")
-    if status == "validated":
-        print(f"✅ object_id: {payload.get('id_object')}")
-        print(f"   canonical_id: {payload.get('canonical_id')}")
-        print()
+print(f"🔢 Totale punti in Qdrant: {count_result.count}")

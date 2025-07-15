@@ -165,59 +165,81 @@ def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tupl
     except Exception as e:
         st.error(f"Errore nella ricerca: {str(e)}")
         return [], 0
-
+    
 def search_objects(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
-    """Ricerca oggetti con filtri e paginazione"""
+    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per id_object."""
     conn = get_db_connection()
     if not conn:
         return [], 0
-    
+
     try:
         cursor = conn.cursor()
-        
-        query = "SELECT * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+
+        # Usiamo DISTINCT ON (id_object) per prendere solo una riga per ogni id_object
+        # e ordiniamo per id_object per una consistenza nella selezione del "primo" duplicato
+        # Inseriamo l'ordinamento anche all'interno del DISTINCT ON per determinare quale riga viene selezionata
+        # E poi un secondo ORDER BY per la paginazione, che può essere lo stesso.
+
+        query_base = "SELECT DISTINCT ON (id_object) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
         params = []
-        
+
         # Aggiunta filtri
         if filters.get('creator'):
-            query += " AND creator = %s"
+            query_base += " AND creator = %s"
             params.append(filters['creator'])
-            
+
         if filters.get('type'):
-            query += " AND type = %s"
+            query_base += " AND type = %s"
             params.append(filters['type'])
-            
+
         if filters.get('subjects'):
-            query += " AND subject && %s"
+            query_base += " AND subject && %s"
             params.append(filters['subjects'])
-            
+
         if filters.get('tags'):
-            query += " AND tags && %s"
+            query_base += " AND tags && %s"
             params.append(filters['tags'])
-        
-        # Count totale
-        count_query = query.replace("SELECT *", "SELECT COUNT(*)")
-        cursor.execute(count_query, params)
+
+        # Per il conteggio totale, dobbiamo contare gli id_object distinti dopo i filtri
+        count_query = f"SELECT COUNT(DISTINCT id_object) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        count_params = []
+        if filters.get('creator'):
+            count_query += " AND creator = %s"
+            count_params.append(filters['creator'])
+        if filters.get('type'):
+            count_query += " AND type = %s"
+            count_params.append(filters['type'])
+        if filters.get('subjects'):
+            count_query += " AND subject && %s"
+            count_params.append(filters['subjects'])
+        if filters.get('tags'):
+            count_query += " AND tags && %s"
+            count_params.append(filters['tags'])
+
+
+        cursor.execute(count_query, count_params)
         total_count = cursor.fetchone()[0]
-        
+
         # Limitazione risultati
         total_count = min(total_count, MAX_RESULTS)
-        
+
         # Query paginata
-        query += " ORDER BY id_object LIMIT %s OFFSET %s"
+        # Aggiungiamo un ORDER BY per garantire la consistenza di DISTINCT ON
+        # e un secondo ORDER BY per la paginazione
+        query_paginated = f"{query_base} ORDER BY id_object, id LIMIT %s OFFSET %s" # Ordina per id_object e poi per id (l'ID univoco dell'annotazione)
         params.extend([page_size, (page - 1) * page_size])
-        
-        cursor.execute(query, params)
+
+        cursor.execute(query_paginated, params)
         columns = [desc[0] for desc in cursor.description]
         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        
+
         cursor.close()
         return results, total_count
-        
+
     except Exception as e:
         st.error(f"Errore nella ricerca: {str(e)}")
         return [], 0
-
+    
 def get_object_details(object_id: str) -> Optional[Dict]:
     """Ottiene dettagli di un singolo oggetto"""
     conn = get_db_connection()
@@ -242,6 +264,27 @@ def get_object_details(object_id: str) -> Optional[Dict]:
     except Exception as e:
         st.error(f"Errore nel recupero dettagli: {str(e)}")
         return None
+
+def get_all_annotations_for_object(object_id: str) -> List[Dict]:
+    """Ottiene tutte le annotazioni (righe) per un dato id_object."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+
+    try:
+        cursor = conn.cursor()
+        # Seleziona tutte le righe che hanno lo stesso id_object
+        cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE id_object = %s ORDER BY timestamp DESC", (object_id,))
+
+        columns = [desc[0] for desc in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        cursor.close()
+        return results
+
+    except Exception as e:
+        st.error(f"Errore nel recupero di tutte le annotazioni per l'oggetto: {str(e)}")
+        return []
 
 def get_recommendations(object_id: str) -> List[Dict]:
     """Ottiene raccomandazioni simili da Qdrant"""
@@ -439,31 +482,31 @@ def render_detail_view():
     if st.button("⬅️ Torna alla ricerca"):
         st.session_state.current_view = 'gallery'
         st.experimental_rerun()
-    
-    # Ottieni dettagli oggetto
+
+    # Ottieni dettagli oggetto (prenderà la riga "principale" con quel id_object)
     object_id = st.session_state.current_object_id
-    object_data = get_object_details(object_id)
-    
+    object_data = get_object_details(object_id) # Questa funzione va bene così com'è
+
     if not object_data:
         st.error("Oggetto non trovato")
         return
-    
+
     # Layout principale (2 colonne)
     col_left, col_right = st.columns([3, 2])
-    
+
     with col_left:
         # Immagine principale
         image_url = get_image_url(object_data.get('image_url', []), object_data.get('isShownBy', []))
         st.image(image_url, use_column_width=True)
-        
+
         # Caption con titolo
         if object_data.get('title'):
             st.caption(object_data['title'])
-    
+
     with col_right:
         # Metadati Europeana
         st.subheader("📚 Metadati Europeana")
-        
+
         metadata_fields = [
             ('Title', 'title'),
             ('Creator', 'creator'),
@@ -474,36 +517,46 @@ def render_detail_view():
             ('Data Provider', 'dataProvider'),
             ('Language', 'language')
         ]
-        
+
         for label, field in metadata_fields:
             value = object_data.get(field)
             if value:
                 if isinstance(value, list):
                     value = ', '.join(value)
                 st.write(f"**{label}:** {value}")
-        
-        # User Generated Content
-        st.subheader("💬 User Generated Content")
-        
-        ugc_fields = [
-            ('Tags', 'tags'),
-            ('Comment', 'comment'),
-            ('User ID', 'user_id'),
-            ('Timestamp', 'timestamp')
-        ]
-        
-        for label, field in ugc_fields:
-            value = object_data.get(field)
-            if value:
-                if isinstance(value, list):
-                    value = ', '.join(value)
-                st.write(f"**{label}:** {value}")
-    
+
+        # Sezione per TUTTE le annotazioni (commenti e tags)
+        st.subheader("💬 Annotazioni Utente")
+
+        all_annotations = get_all_annotations_for_object(object_id)
+
+        if all_annotations:
+            # Per ogni annotazione trovata, mostra i suoi dettagli
+            for i, annotation in enumerate(all_annotations):
+                st.markdown(f"---") # Separatore per chiarezza
+                st.write(f"**Annotazione #{i+1}**")
+                if annotation.get('user_id'):
+                    st.write(f"**User ID:** {annotation['user_id']}")
+                if annotation.get('timestamp'):
+                    st.write(f"**Timestamp:** {annotation['timestamp']}")
+                if annotation.get('comment'):
+                    st.write(f"**Commento:** {annotation['comment']}")
+                if annotation.get('tags'):
+                    # Assicurati che 'tags' sia una lista prima di unirla
+                    tags_value = annotation['tags']
+                    if isinstance(tags_value, list):
+                        st.write(f"**Tags:** {', '.join(tags_value)}")
+                    else:
+                        st.write(f"**Tags:** {tags_value}") # Per il caso non sia una lista
+        else:
+            st.info("Nessuna annotazione utente disponibile per questo oggetto.")
+
+
     # Sezione oggetti simili
     st.subheader("🔍 Oggetti simili")
-    
+
     recommendations = get_recommendations(object_id)
-    
+
     if recommendations:
         # Griglia 5x2
         for row in range(2):
@@ -513,15 +566,16 @@ def render_detail_view():
                 if item_idx < len(recommendations):
                     item = recommendations[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
-                    
+
                     with col:
                         st.image(image_url, use_column_width=True)
-                        if st.button(f"👁️", key=f"rec_{item['id']}"): # <-- cambiato da id_object a id
+                        if st.button(f"👁️", key=f"rec_{item['id']}"):
                             st.session_state.current_object_id = item['id_object']
                             st.experimental_rerun()
     else:
         st.info("Raccomandazioni non disponibili")
 
+        
 def initialize_session_state():
     """Inizializza session state"""
     if 'current_view' not in st.session_state:
