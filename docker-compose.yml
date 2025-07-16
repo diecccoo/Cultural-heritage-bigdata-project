@@ -107,17 +107,6 @@ services:
       - heritage-net
 
 
-  spark-worker:
-    container_name: spark-worker
-    depends_on:
-      - spark-master
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-    image: bitnami/spark:latest
-    networks:
-      - heritage-net   
-
   eu-to-raw:
     build:
       context: .
@@ -149,7 +138,7 @@ services:
     container_name: eu-to-cleansed
     restart: always
     depends_on:
-      - kafka
+      - spark-master
       - minio
     environment:
       AWS_ACCESS_KEY_ID: minio
