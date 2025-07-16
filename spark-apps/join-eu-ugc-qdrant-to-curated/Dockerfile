@@ -21,4 +21,4 @@ CMD spark-submit \
   --packages io.delta:delta-spark_2.12:3.3.1 \
   --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
   --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-  join_eu_ugc_qdrant.py
+  join_eu_ugc_qdrant_comments.py

@@ -159,7 +159,7 @@ while True:
     ugc_count = ugc_df.count()
     if ugc_count == 0:
         print("[DEBUG] Nessuna nuova annotazione trovata. Attendo...")
-        time.sleep(60)
+        time.sleep(75)
         continue
     else:
         print(f"[DEBUG] Annotazioni nuove trovate: {ugc_count}")
@@ -193,5 +193,5 @@ while True:
         joined_df.write.format("delta").mode("overwrite").save(CURATED_PATH)
         print("[DEBUG] Scrittura completata nel layer curated (overwrite).")
 
-    print("[DEBUG] Attendo 30 secondi prima del prossimo ciclo...")
-    time.sleep(30)
+    print("[DEBUG] Attendo 45 secondi prima del prossimo ciclo...")
+    time.sleep(45)

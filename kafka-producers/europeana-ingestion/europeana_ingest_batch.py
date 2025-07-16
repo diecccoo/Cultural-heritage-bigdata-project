@@ -14,10 +14,10 @@ load_dotenv()
 # --- Configurazione ---
 API_KEY = os.getenv("API_KEY")
 ROWS_PER_PAGE = 100  #sconsigliato da europeana sopra i 100
-MAX_PAGES_PER_HOUR = 3  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
-MAX_RETRIES = 5
+MAX_PAGES_PER_HOUR = 4  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
+MAX_RETRIES = 10
 BACKOFF_FACTOR = 2
-MAX_CONSECUTIVE_FAILURES = 5
+MAX_CONSECUTIVE_FAILURES = 7
 LANGUAGE = "en"
 
 

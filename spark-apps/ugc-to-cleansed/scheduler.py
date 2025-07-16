@@ -1,7 +1,7 @@
 import time
 import os
 
-INTERVAL_MINUTES = 1 # Modifica se vuoi un'altra frequenza
+INTERVAL_MINUTES = 1.5 # Modifica se vuoi un'altra frequenza
 
 while True:
     print("[Scheduler] Avvio job Spark per pulizia e Parquet...")
