@@ -1,3 +1,4 @@
+# funziona
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, lit, current_timestamp, max
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType

@@ -12,7 +12,7 @@ while True:
         "--packages io.delta:delta-spark_2.12:3.3.1 "
         "--conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension "
         "--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog "
-        "metadata_to_delta_table.py"
+        "eu_raw_to_cleansed_merge.py"
     )
 
     if exit_code == 0:

@@ -1,4 +1,6 @@
-#file che converte i metadati Europeana in formato Delta su MinIO
+# funziona
+# overwrite
+# file che converte i metadati Europeana in formato Delta su MinIO
 # Questo script:
 # Legge i metadati Europeana in formato JSON da MinIO
 # Pulisce i dati rimuovendo record con GUID nulli o duplicati
