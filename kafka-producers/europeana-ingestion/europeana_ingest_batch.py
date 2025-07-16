@@ -12,41 +12,33 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Configurazione ---
-API_KEY = os.getenv("api_key")
+API_KEY = os.getenv("API_KEY")
 ROWS_PER_PAGE = 100  #sconsigliato da europeana sopra i 100
-MAX_PAGES_PER_HOUR = 20  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
+MAX_PAGES_PER_HOUR = 3  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
 MAX_RETRIES = 5
 BACKOFF_FACTOR = 2
-MAX_CONSECUTIVE_FAILURES = 10
+MAX_CONSECUTIVE_FAILURES = 5
 LANGUAGE = "en"
-TYPES = ["IMAGE", "TEXT"]
+
 
 PROVIDERS = [
     "Wellcome Collection",
     "The European Library",
     "CultureGrid",
-    "AthenaPlus",
     "CARARE",
     "Digital Repository of Ireland",
     "MUSEU",
-    "National Library of Wales",
-    "Jewish Heritage Network",
-    "National Library of Scotland",
     "European Fashion Heritage Association",
     "LoCloud",
     "PHOTOCONSORTIUM",
     "OpenUp!",
-    "Europeana Sounds",
-    "Europeana Food and Drink",
-    "International Association of Labour History Institutions",
-    "Open Access Publishing in European Networks Foundation",
     "EUscreen",
-    "Digital Archive for the Study of pre-Islamic Arabian Inscriptions",
-    "University College Dublin",
-    "Irish Manuscripts Commission",
     "Dutch Collections for Europe",
     "Heritage Malta",
-    "EuropeanaTravel"
+    "EuropeanaTravel",
+    "Deputy Ministry of Culture, Republic of Cyprus",
+    "Jewish Heritage Network",
+    "Europeana 280"
 ]
 
 # --- Paths ---
@@ -95,7 +87,7 @@ def build_europeana_url(query, provider, cursor):
         "cursor": cursor,
         "qf": [
             f'PROVIDER:"{provider}"',
-            "(TYPE:IMAGE OR TYPE:TEXT)",
+            "(TYPE:IMAGE)",
             f"LANGUAGE:{LANGUAGE}"
         ]
     }
@@ -111,7 +103,7 @@ consecutive_failures = 0
 total_saved = 0
 
 filter_query = (
-    f'PROVIDER:"{provider}" AND (TYPE:IMAGE OR TYPE:TEXT) AND LANGUAGE:{LANGUAGE}'
+    f'PROVIDER:"{provider}" AND (TYPE:IMAGE) AND LANGUAGE:{LANGUAGE}'
 )
 
 cursor = "*"  

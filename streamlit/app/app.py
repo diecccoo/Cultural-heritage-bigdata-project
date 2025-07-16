@@ -7,6 +7,10 @@ import logging
 from qdrant_client.models import NamedVector
 import random
 
+from PIL import Image
+import requests
+from io import BytesIO
+
 # Configurazione logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -90,11 +94,8 @@ def get_filter_options() -> Dict[str, List[str]]:
         cursor.execute("SELECT DISTINCT creator FROM join_metadata_deduplicated WHERE creator IS NOT NULL ORDER BY creator")
         options['creators'] = [row[0] for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT UNNEST(subject) FROM join_metadata_deduplicated WHERE subject IS NOT NULL ORDER BY 1")
-        options['subjects'] = [row[0] for row in cursor.fetchall()]
-        
-        cursor.execute("SELECT DISTINCT type FROM join_metadata_deduplicated WHERE type IS NOT NULL ORDER BY type")
-        options['types'] = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT DISTINCT UNNEST(provider) FROM join_metadata_deduplicated WHERE provider IS NOT NULL ORDER BY 1")
+        options['provider'] = [row[0] for row in cursor.fetchall()]
         
         cursor.execute("SELECT DISTINCT UNNEST(tags) FROM join_metadata_deduplicated WHERE tags IS NOT NULL ORDER BY 1")
         options['tags'] = [row[0] for row in cursor.fetchall()]
@@ -103,7 +104,7 @@ def get_filter_options() -> Dict[str, List[str]]:
         return options
         
     except Exception as e:
-        st.error(f"Errore nel caricamento filtri: {str(e)}")
+        st.error(f"Error in charging filters: {str(e)}")
         return {}
     
 def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Optional[float] = None) -> Tuple[List[Dict], int]:
@@ -124,12 +125,9 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
         if filters.get('creator'):
             where_clauses.append("creator = %s")
             params.append(filters['creator'])
-        if filters.get('type'):
-            where_clauses.append("type = %s")
-            params.append(filters['type'])
-        if filters.get('subjects'):
-            where_clauses.append("subject && %s")
-            params.append(filters['subjects'])
+        if filters.get('provider'):
+            where_clauses.append("provider && %s")
+            params.append(filters['provider'])
         if filters.get('tags'):
             where_clauses.append("tags && %s")
             params.append(filters['tags'])
@@ -271,11 +269,64 @@ def get_recommendations(guid: str) -> List[Dict]:
 def reset_filters_callback():
     """Resetta i filtri e genera un nuovo seed casuale."""
     st.session_state.creator_filter = None
-    st.session_state.subjects_filter = []
-    st.session_state.type_filter = None
+    st.session_state.provider_filter = []
     st.session_state.tags_filter = []
     st.session_state.current_page = 1
     st.session_state.random_seed = random.random()
+
+def increment_page():
+    st.session_state.current_page += 1
+    logger.info(f"Pagina successiva (callback): {st.session_state.current_page}")
+
+def decrement_page():
+    st.session_state.current_page -= 1
+    logger.info(f"Pagina precedente (callback): {st.session_state.current_page}")
+
+
+# @st.cache_data # Potresti voler cachare anche questa funzione per performance
+def process_image(image_url: str, target_width: int = 200, target_height: int = 200) -> Image.Image:
+    """
+    Scarica e processa un'immagine, ridimensionandola per adattarsi al riquadro
+    senza tagliare (emula object-fit: contain), aggiungendo padding se necessario.
+    """
+    try:
+        response = requests.get(image_url, timeout=10) # Aggiunto timeout
+        response.raise_for_status() # Lancia un errore per risposte HTTP errate
+        img = Image.open(BytesIO(response.content))
+
+        # Ridimensiona l'immagine mantenendo l'aspect ratio per adattarsi al riquadro
+        img.thumbnail((target_width, target_height), Image.LANCZOS)
+
+        # Crea un'immagine di sfondo (canvas) delle dimensioni target
+        # E incolla l'immagine ridimensionata al centro.
+        # Il colore di sfondo sarà trasparente se l'immagine originale ha un canale alpha,
+        # altrimenti sarà nero per impostazione predefinita. Puoi specificarlo: color=(0,0,0) per nero
+        # o color=(240,240,240) per un grigio chiaro.
+        
+        # Per un background solido e visibile, puoi creare una nuova immagine con il colore desiderato
+        # e poi incollare l'immagine processata sopra.
+        
+        background_color = (30, 30, 30) # Un colore scuro che si abbini al tema di Streamlit
+        
+        # Creiamo un'immagine con il colore di sfondo desiderato
+        new_img = Image.new('RGB', (target_width, target_height), background_color)
+        
+        # Calcoliamo la posizione per centrare l'immagine ridimensionata
+        left = (target_width - img.width) // 2
+        top = (target_height - img.height) // 2
+        
+        # Incolliamo l'immagine ridimensionata sul nuovo sfondo
+        new_img.paste(img, (left, top))
+        
+        return new_img
+
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"Errore di rete o HTTP durante il download di {image_url}: {req_err}")
+        return Image.new('RGB', (target_width, target_height), color = 'grey') # Placeholder
+    except Exception as e:
+        logger.error(f"Errore generico nel processare l'immagine {image_url}: {e}")
+        return Image.new('RGB', (target_width, target_height), color = 'grey') # Placeholder
+
 
 def render_gallery_view():
     """Renderizza la vista gallery con filtri e griglia"""
@@ -285,22 +336,17 @@ def render_gallery_view():
         st.session_state.filter_options = get_filter_options()
 
     with st.sidebar:
-        st.header("🔍 Filters")
+        st.header("Filters")
         
         selected_creator = st.selectbox(
             "Creator",
             options=[None] + st.session_state.filter_options.get('creators', []),
             key="creator_filter"
         )
-        selected_subjects = st.multiselect(
-            "Subject",
-            options=st.session_state.filter_options.get('subjects', []),
-            key="subjects_filter"
-        )
-        selected_type = st.selectbox(
-            "Type",
-            options=[None] + st.session_state.filter_options.get('types', []),
-            key="type_filter"
+        selected_provider = st.multiselect(
+            "Provider",
+            options=st.session_state.filter_options.get('provider', []),
+            key="provider_filter"
         )
         selected_tags = st.multiselect(
             "Tags",
@@ -309,19 +355,17 @@ def render_gallery_view():
         )
 
         # <--- MODIFICA: Il pulsante ora usa la funzione di callback --->
-        st.button("🔄 Reset Filters", on_click=reset_filters_callback)
+        st.button("Reset Filters", on_click=reset_filters_callback)
 
     filters_changed = (
         st.session_state.get('selected_creator') != selected_creator or
-        st.session_state.get('selected_subjects') != selected_subjects or
-        st.session_state.get('selected_type') != selected_type or
+        st.session_state.get('selected_provider') != selected_provider or
         st.session_state.get('selected_tags') != selected_tags
     )
 
     if filters_changed:
         st.session_state.selected_creator = selected_creator
-        st.session_state.selected_subjects = selected_subjects
-        st.session_state.selected_type = selected_type
+        st.session_state.selected_provider = selected_provider
         st.session_state.selected_tags = selected_tags
         st.session_state.current_page = 1
         st.session_state.random_seed = random.random()
@@ -329,55 +373,59 @@ def render_gallery_view():
 
     filters = {
         'creator': st.session_state.get('selected_creator'),
-        'subjects': st.session_state.get('selected_subjects'),
-        'type': st.session_state.get('selected_type'),
+        'provider': st.session_state.get('selected_provider'),
         'tags': st.session_state.get('selected_tags')
     }
 
     current_page = st.session_state.get('current_page', 1)
     seed = st.session_state.get('random_seed')
 
-    with st.spinner("Caricamento risultati..."):
+    with st.spinner("Charging results..."):
         gallery_data, total_results = search_guids(filters, current_page, seed=seed)
 
     st.session_state.gallery_data = gallery_data
     st.session_state.total_results = total_results
 
-    st.info(f"📊 Trovati {total_results} oggetti")
+    st.info(f"Found {total_results} objects")
 
     if gallery_data:
-        for row in range(5):
-            cols = st.columns(4)
+        for row in range(5): # Assicurati che questo sia corretto per le tue 5 pagine x 20 = 100 risultati
+            cols = st.columns(4) # 4 colonne
             for col_idx, col in enumerate(cols):
-                item_idx = row * 4 + col_idx
+                item_idx = row * 4 + col_idx # 4 immagini per riga
                 if item_idx < len(gallery_data):
                     item = gallery_data[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
+                    
                     with col:
-                        st.image(image_url, use_column_width=True, caption=item.get('title', ''))
-                        if st.button(f"📖 Dettagli", key=f"detail_{item['id']}"):
+                        # Processa l'immagine prima di visualizzarla
+                        # Puoi scegliere dimensioni diverse per la galleria
+                        processed_img = process_image(image_url, target_width=200, target_height=200)
+                        st.image(processed_img, use_column_width=True, caption=item.get('title', ''))
+                        if st.button(f"More details", key=f"detail_{item['id']}"):
                             st.session_state.current_view = 'detail'
                             st.session_state.current_guid = item['guid']
                             st.rerun()
-                            
+
     max_pages = min(3, (total_results + PAGE_SIZE - 1) // PAGE_SIZE)
 
     if max_pages > 1:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
-            if current_page > 1 and st.button("⬅️ Precedente"):
-                st.session_state.current_page -= 1
-                st.rerun()
+            if st.session_state.current_page > 1:
+                # Usa la callback on_click per il pulsante "Previous"
+                st.button("Previous", on_click=decrement_page)
         with col2:
-            st.write(f"Pagina {current_page} di {max_pages}")
+            st.write(f"Page {st.session_state.current_page} of {max_pages}")
         with col3:
-            if current_page < max_pages and st.button("Successiva ➡️"):
-                st.session_state.current_page += 1
-                st.rerun()
+            if st.session_state.current_page < max_pages:
+                # Usa la callback on_click per il pulsante "Next"
+                st.button("Next", on_click=increment_page)
+   
 
 def render_detail_view():
     """Renderizza la vista dettagli oggetto"""
-    if st.button("⬅️ Torna alla ricerca"):
+    if st.button("Back to Gallery"):
         st.session_state.current_view = 'gallery'
         # Rimuovi l'associazione esplicita dei filtri per permettere a st.rerun() di ridisegnare i widget con i valori di session_state
         st.rerun()
@@ -386,19 +434,21 @@ def render_detail_view():
     guid_data = get_guid_details(guid)
 
     if not guid_data:
-        st.error("Oggetto non trovato")
+        st.error("Object not found")
         return
 
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
         image_url = get_image_url(guid_data.get('image_url', []), guid_data.get('isShownBy', []))
-        st.image(image_url, use_column_width=True)
+        # Per la vista dettagli, potresti volere un'immagine più grande
+        processed_img = process_image(image_url, target_width=450, target_height=450) #MODIFICARE: Dimensioni per la vista dettagli
+        st.image(processed_img, use_column_width=True)
         if guid_data.get('title'):
             st.caption(guid_data['title'])
 
     with col_right:
-        st.subheader("📚 Metadati Europeana")
+        st.subheader("Description")
         metadata_fields = [
             ('Title', 'title'), ('Creator', 'creator'), ('Description', 'description'),
             ('Type', 'type'), ('Subject', 'subject'), ('Rights', 'rights'),
@@ -409,7 +459,7 @@ def render_detail_view():
             if value:
                 st.write(f"**{label}:** {', '.join(value) if isinstance(value, list) else value}")
 
-        st.subheader("💬 Annotazioni Utente")
+        st.subheader("Comments")
         all_annotations = get_all_annotations_for_guid(guid)
         meaningful_annotations = [
             ann for ann in all_annotations
@@ -418,31 +468,34 @@ def render_detail_view():
         if meaningful_annotations:
             for i, ann in enumerate(meaningful_annotations):
                 st.markdown(f"---")
-                st.write(f"**Annotazione #{i+1}**")
+                st.write(f"**Comment #{i+1}**")
                 if ann.get('user_id'): st.write(f"**User ID:** {ann['user_id']}")
                 if ann.get('timestamp'): st.write(f"**Timestamp:** {ann['timestamp']}")
-                if ann.get('comment'): st.write(f"**Commento:** {ann['comment']}")
+                if ann.get('comment'): st.write(f"**Comment:** {ann['comment']}")
                 if ann.get('tags'): st.write(f"**Tags:** {', '.join(ann['tags']) if isinstance(ann['tags'], list) else ann['tags']}")
         else:
-            st.info("Nessuna annotazione utente disponibile per questo oggetto.")
+            st.info("No comments for this object.")
 
-    st.subheader("🔍 Oggetti simili")
+    st.subheader("Similar objects")
     recommendations = get_recommendations(guid)
     if recommendations:
         for row in range(2):
-            cols = st.columns(5)
+            cols = st.columns(5) # 5 colonne per le raccomandazioni
             for col_idx, col in enumerate(cols):
-                item_idx = row * 5 + col_idx
+                item_idx = row * 5 + col_idx # 5 immagini per riga
                 if item_idx < len(recommendations):
                     item = recommendations[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
                     with col:
-                        st.image(image_url, use_column_width=True)
-                        if st.button(f"👁️", key=f"rec_{item['id']}"):
+                        # Processa anche qui le immagini simili
+                        processed_img = process_image(image_url, target_width=180, target_height=180) # Dimensioni adatte per la sezione simili
+                        st.image(processed_img, use_column_width=True)
+                        if st.button(f"More details", key=f"rec_{item['id']}"):
                             st.session_state.current_guid = item['guid']
                             st.rerun()
     else:
-        st.info("Raccomandazioni non disponibili")
+        st.info("No recommendations available for this object.")
+
         
 def initialize_session_state():
     """Inizializza session state"""
@@ -452,10 +505,8 @@ def initialize_session_state():
         st.session_state.current_page = 1
     if 'selected_creator' not in st.session_state:
         st.session_state.selected_creator = None
-    if 'selected_subjects' not in st.session_state:
-        st.session_state.selected_subjects = []
-    if 'selected_type' not in st.session_state:
-        st.session_state.selected_type = None
+    if 'selected_provider' not in st.session_state:
+        st.session_state.selected_provider = []
     if 'selected_tags' not in st.session_state:
         st.session_state.selected_tags = []
     if 'random_seed' not in st.session_state:
