@@ -4,14 +4,14 @@ from qdrant_client import QdrantClient
 import pandas as pd
 from typing import List, Dict, Optional, Tuple
 import logging
-from qdrant_client.models import NamedVector # <--- AGGIUNGI QUESTA RIGA
+from qdrant_client.models import NamedVector
+import random
 
 # Configurazione logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s') # Aggiunto format per più dettagli
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# aggiungo flag per tenere traccia se è stato mostrato un errore di connessione principale per prevenire visualizzazione
-# ripetuta di errori o tentativi di log ricorsivi
+# Flag per errori di connessione
 if 'db_conn_error_shown' not in st.session_state:
     st.session_state.db_conn_error_shown = False
 if 'qdrant_conn_error_shown' not in st.session_state:
@@ -37,20 +37,18 @@ PAGE_SIZE = 20
 MAX_RESULTS = 60
 PLACEHOLDER_IMAGE = "https://via.placeholder.com/300?text=Non+trovata"
 
-
 @st.cache_resource
 def get_db_connection():
     """Crea connessione al database PostgreSQL"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
-        st.session_state.db_conn_error_shown = False # Resetta il flag se la connessione ha successo
+        st.session_state.db_conn_error_shown = False
         return conn
     except Exception as e:
-        # Solo loggare/mostrare l'errore una volta o con un limite
         if not st.session_state.db_conn_error_shown:
             logger.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
             st.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
-            st.session_state.db_conn_error_shown = True # Imposta il flag a True
+            st.session_state.db_conn_error_shown = True
         return None
 
 @st.cache_resource
@@ -58,15 +56,15 @@ def get_qdrant_client():
     """Crea client Qdrant"""
     try:
         client = QdrantClient(host=QDRANT_CONFIG['host'], port=QDRANT_CONFIG['port'])
-        client.get_collections() 
+        client.get_collections()
         logger.info("Connessione a Qdrant stabilita con successo.")
-        st.session_state.qdrant_conn_error_shown = False # Resetta il flag se la connessione ha successo
+        st.session_state.qdrant_conn_error_shown = False
         return client
     except Exception as e:
         if not st.session_state.qdrant_conn_error_shown:
             logger.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
             st.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
-            st.session_state.qdrant_conn_error_shown = True # Imposta il flag a True
+            st.session_state.qdrant_conn_error_shown = True
         return None
 
 def get_image_url(image_url_array: List[str], is_shown_by_array: List[str]) -> str:
@@ -89,19 +87,15 @@ def get_filter_options() -> Dict[str, List[str]]:
         cursor = conn.cursor()
         options = {}
         
-        # Creators
         cursor.execute("SELECT DISTINCT creator FROM join_metadata_deduplicated WHERE creator IS NOT NULL ORDER BY creator")
         options['creators'] = [row[0] for row in cursor.fetchall()]
         
-        # Subjects
         cursor.execute("SELECT DISTINCT UNNEST(subject) FROM join_metadata_deduplicated WHERE subject IS NOT NULL ORDER BY 1")
         options['subjects'] = [row[0] for row in cursor.fetchall()]
         
-        # Types
         cursor.execute("SELECT DISTINCT type FROM join_metadata_deduplicated WHERE type IS NOT NULL ORDER BY type")
         options['types'] = [row[0] for row in cursor.fetchall()]
         
-        # Tags
         cursor.execute("SELECT DISTINCT UNNEST(tags) FROM join_metadata_deduplicated WHERE tags IS NOT NULL ORDER BY 1")
         options['tags'] = [row[0] for row in cursor.fetchall()]
         
@@ -111,10 +105,9 @@ def get_filter_options() -> Dict[str, List[str]]:
     except Exception as e:
         st.error(f"Errore nel caricamento filtri: {str(e)}")
         return {}
-
     
-def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[List[Dict], int]:
-    """Ricerca oggetti con filtri e paginazione, gestendo i duplicati per guid."""
+def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Optional[float] = None) -> Tuple[List[Dict], int]:
+    """Ricerca oggetti con filtri, ordinamento casuale e paginazione."""
     conn = get_db_connection()
     if not conn:
         return [], 0
@@ -122,61 +115,38 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[
     try:
         cursor = conn.cursor()
 
-        # Usiamo DISTINCT ON (guid) per prendere solo una riga per ogni guid
-        # e ordiniamo per guid per una consistenza nella selezione del "primo" duplicato
-        # Inseriamo l'ordinamento anche all'interno del DISTINCT ON per determinare quale riga viene selezionata
-        # E poi un secondo ORDER BY per la paginazione, che può essere lo stesso.
+        if seed is not None:
+            cursor.execute("SELECT setseed(%s)", (seed,))
 
-        query_base = "SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
+        where_clauses = ["image_url IS NOT NULL AND image_url[1] IS NOT NULL"]
         params = []
 
-        # Aggiunta filtri
         if filters.get('creator'):
-            query_base += " AND creator = %s"
+            where_clauses.append("creator = %s")
             params.append(filters['creator'])
-
         if filters.get('type'):
-            query_base += " AND type = %s"
+            where_clauses.append("type = %s")
             params.append(filters['type'])
-
         if filters.get('subjects'):
-            query_base += " AND subject && %s"
+            where_clauses.append("subject && %s")
             params.append(filters['subjects'])
-
         if filters.get('tags'):
-            query_base += " AND tags && %s"
+            where_clauses.append("tags && %s")
             params.append(filters['tags'])
+        
+        where_string = " AND ".join(where_clauses)
 
-        # Per il conteggio totale, dobbiamo contare gli guid distinti dopo i filtri
-        count_query = f"SELECT COUNT(DISTINCT guid) FROM join_metadata_deduplicated WHERE image_url IS NOT NULL AND image_url[1] IS NOT NULL"
-        count_params = []
-        if filters.get('creator'):
-            count_query += " AND creator = %s"
-            count_params.append(filters['creator'])
-        if filters.get('type'):
-            count_query += " AND type = %s"
-            count_params.append(filters['type'])
-        if filters.get('subjects'):
-            count_query += " AND subject && %s"
-            count_params.append(filters['subjects'])
-        if filters.get('tags'):
-            count_query += " AND tags && %s"
-            count_params.append(filters['tags'])
-
-
-        cursor.execute(count_query, count_params)
+        count_query = f"SELECT COUNT(DISTINCT guid) FROM join_metadata_deduplicated WHERE {where_string}"
+        cursor.execute(count_query, params)
         total_count = cursor.fetchone()[0]
-
-        # Limitazione risultati
         total_count = min(total_count, MAX_RESULTS)
 
-        # Query paginata
-        # Aggiungiamo un ORDER BY per garantire la consistenza di DISTINCT ON
-        # e un secondo ORDER BY per la paginazione
-        query_paginated = f"{query_base} ORDER BY guid, id LIMIT %s OFFSET %s" # Ordina per guid e poi per id (l'ID univoco dell'annotazione)
-        params.extend([page_size, (page - 1) * page_size])
-
-        cursor.execute(query_paginated, params)
+        subquery = f"SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE {where_string} ORDER BY guid, id"
+        query_paginated = f"SELECT * FROM ({subquery}) AS distinct_items ORDER BY RANDOM() LIMIT %s OFFSET %s"
+        
+        final_params = params + [page_size, (page - 1) * page_size]
+        cursor.execute(query_paginated, final_params)
+        
         columns = [desc[0] for desc in cursor.description]
         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
@@ -186,7 +156,7 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE) -> Tuple[
     except Exception as e:
         st.error(f"Errore nella ricerca: {str(e)}")
         return [], 0
-    
+
 def get_guid_details(guid: str) -> Optional[Dict]:
     """Ottiene dettagli di un singolo oggetto"""
     conn = get_db_connection()
@@ -220,7 +190,6 @@ def get_all_annotations_for_guid(guid: str) -> List[Dict]:
 
     try:
         cursor = conn.cursor()
-        # Seleziona tutte le righe che hanno lo stesso guid
         cursor.execute("SELECT * FROM join_metadata_deduplicated WHERE guid = %s ORDER BY timestamp DESC", (guid,))
 
         columns = [desc[0] for desc in cursor.description]
@@ -233,6 +202,7 @@ def get_all_annotations_for_guid(guid: str) -> List[Dict]:
         st.error(f"Errore nel recupero di tutte le annotazioni per l'oggetto: {str(e)}")
         return []
 
+# <--- MODIFICA: Funzione `get_recommendations` aggiornata --->
 def get_recommendations(guid: str) -> List[Dict]:
     """Ottiene raccomandazioni simili da Qdrant"""
     client = get_qdrant_client()
@@ -241,69 +211,45 @@ def get_recommendations(guid: str) -> List[Dict]:
         return []
     
     try:
-        # Ricerca vettore dell'oggetto corrente
-        logger.info(f"Cercando vettore per guid (che è guid): {guid} in Qdrant.")
+        logger.info(f"Cercando vettore per guid: {guid} in Qdrant.")
         search_result = client.scroll(
             collection_name="heritage_embeddings",
-            scroll_filter={
-                "must": [
-                    {
-                        "key": "guid", # Campo corretto
-                        "match": {"value": guid}
-                    }
-                ]
-            },
+            scroll_filter={"must": [{"key": "guid", "match": {"value": guid}}]},
             limit=1,
             with_vectors=True
         )
         
         if not search_result[0]:
-            logger.warning(f"Nessun vettore trovato in Qdrant per guid (guid): {guid}")
+            logger.warning(f"Nessun vettore trovato in Qdrant per guid: {guid}")
             return []
         
-        # Ottieni i vettori nominati dall'oggetto corrente
-        current_named_vectors = search_result[0][0].vector # Questo sarà un dizionario come {"combined": [...], "image": [...]}
-        
-        # Seleziona il vettore specifico da usare per la query (es. "combined")
+        current_named_vectors = search_result[0][0].vector
         query_vector_data = current_named_vectors.get("combined")
         
         if query_vector_data is None:
-            logger.error("Vettore 'combined' non trovato per l'oggetto corrente. Impossibile cercare raccomandazioni.")
+            logger.error("Vettore 'combined' non trovato per l'oggetto corrente.")
             return []
 
-        logger.info(f"Vettore trovato per guid (guid): {guid}. Inizio ricerca oggetti simili.")
+        logger.info(f"Vettore trovato per guid: {guid}. Inizio ricerca oggetti simili.")
         
-        # Ricerca oggetti simili
         similar_results = client.search(
             collection_name="heritage_embeddings",
-            # Modifica qui: crea un'istanza di NamedVector
-            query_vector=NamedVector(
-                name="combined", # Specifica il nome del vettore
-                vector=query_vector_data # Passa i dati del vettore
-            ),
-            limit=11,  # 10 + 1 (oggetto corrente)
-            score_threshold=0.75,
+            query_vector=NamedVector(name="combined", vector=query_vector_data),
+            limit=11,
+            # score_threshold=0.75, # <--- MODIFICA: Rimosso per garantire sempre dei risultati
             append_payload=True
         )
         
-        # Filtra oggetto corrente e ottieni ID
-        similar_ids = []
-        for result in similar_results:
-            # Assicurati che 'payload' e 'guid' esistano nel risultato prima di accedervi
-            if result.payload and "guid" in result.payload and result.payload["guid"] != guid:
-                similar_ids.append(result.payload["guid"])
-        
+        similar_ids = [res.payload["guid"] for res in similar_results if res.payload and "guid" in res.payload and res.payload["guid"] != guid]
         similar_ids = similar_ids[:10]
         
         logger.info(f"Trovati {len(similar_ids)} ID oggetti simili: {similar_ids}")
 
-        # Ottieni metadati da PostgreSQL
         if similar_ids:
             conn = get_db_connection()
             if conn:
                 cursor = conn.cursor()
                 placeholders = ','.join(['%s'] * len(similar_ids))
-                # La query dovrebbe essere corretta se 'guid' in PostgreSQL corrisponde a 'guid' in Qdrant
                 query = f"SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE guid IN ({placeholders}) ORDER BY guid, id"
                 cursor.execute(query, similar_ids)
                 
@@ -321,73 +267,50 @@ def get_recommendations(guid: str) -> List[Dict]:
         st.error(f"Errore nel recupero raccomandazioni: {str(e)}")
         return []
 
+# <--- MODIFICA: Aggiunta la funzione di callback per il reset dei filtri --->
+def reset_filters_callback():
+    """Resetta i filtri e genera un nuovo seed casuale."""
+    st.session_state.creator_filter = None
+    st.session_state.subjects_filter = []
+    st.session_state.type_filter = None
+    st.session_state.tags_filter = []
+    st.session_state.current_page = 1
+    st.session_state.random_seed = random.random()
+
 def render_gallery_view():
     """Renderizza la vista gallery con filtri e griglia"""
     st.title("🏛️ Cultural Heritage Dashboard")
 
-    # Carica opzioni filtri
     if 'filter_options' not in st.session_state:
         st.session_state.filter_options = get_filter_options()
 
-    # Sidebar con filtri
     with st.sidebar:
         st.header("🔍 Filters")
-
-        # Creator dropdown
-        # Calcola l'indice iniziale per il selectbox del Creator
-        try:
-            # Tenta di trovare l'indice del valore selezionato nella lista delle opzioni reali
-            # e aggiungi 1 perché [None] è la prima opzione
-            current_creator_index = st.session_state.filter_options.get('creators', []).index(st.session_state.get('selected_creator')) + 1
-        except ValueError:
-            # Se il valore selezionato non è nella lista (es. è None), imposta l'indice a 0 (che è [None])
-            current_creator_index = 0
-
+        
         selected_creator = st.selectbox(
             "Creator",
             options=[None] + st.session_state.filter_options.get('creators', []),
-            index=current_creator_index, # Usa l'indice calcolato qui
-            key="creator_filter" # Aggiungi una chiave univoca per il widget
+            key="creator_filter"
         )
-
-        # Subject multiselect
         selected_subjects = st.multiselect(
             "Subject",
             options=st.session_state.filter_options.get('subjects', []),
-            default=st.session_state.get('selected_subjects', [])
+            key="subjects_filter"
         )
-
-        # Type dropdown
-        # Calcola l'indice iniziale per il selectbox del Type
-        try:
-            current_type_index = st.session_state.filter_options.get('types', []).index(st.session_state.get('selected_type')) + 1
-        except ValueError:
-            current_type_index = 0
-
         selected_type = st.selectbox(
             "Type",
             options=[None] + st.session_state.filter_options.get('types', []),
-            index=current_type_index, # Usa l'indice calcolato qui
-            key="type_filter" # Aggiungi una chiave univoca per il widget
+            key="type_filter"
         )
-
-        # Tags multiselect
         selected_tags = st.multiselect(
             "Tags",
             options=st.session_state.filter_options.get('tags', []),
-            default=st.session_state.get('selected_tags', [])
+            key="tags_filter"
         )
 
-        # Reset button
-        if st.button("🔄 Reset Filters"):
-            st.session_state.selected_creator = None
-            st.session_state.selected_subjects = []
-            st.session_state.selected_type = None
-            st.session_state.selected_tags = []
-            st.session_state.current_page = 1
-            st.rerun()
+        # <--- MODIFICA: Il pulsante ora usa la funzione di callback --->
+        st.button("🔄 Reset Filters", on_click=reset_filters_callback)
 
-    # Aggiorna filtri in session state
     filters_changed = (
         st.session_state.get('selected_creator') != selected_creator or
         st.session_state.get('selected_subjects') != selected_subjects or
@@ -396,43 +319,32 @@ def render_gallery_view():
     )
 
     if filters_changed:
-    # Evita rerun infiniti con un flag
-        if 'last_filter_rerun' not in st.session_state or not st.session_state.last_filter_rerun:
-            st.session_state.selected_creator = selected_creator
-            st.session_state.selected_subjects = selected_subjects
-            st.session_state.selected_type = selected_type
-            st.session_state.selected_tags = selected_tags
-            st.session_state.current_page = 1
-            st.session_state.last_filter_rerun = True
-            st.rerun()
-    else:
-        st.session_state.last_filter_rerun = False
+        st.session_state.selected_creator = selected_creator
+        st.session_state.selected_subjects = selected_subjects
+        st.session_state.selected_type = selected_type
+        st.session_state.selected_tags = selected_tags
+        st.session_state.current_page = 1
+        st.session_state.random_seed = random.random()
+        st.rerun()
 
+    filters = {
+        'creator': st.session_state.get('selected_creator'),
+        'subjects': st.session_state.get('selected_subjects'),
+        'type': st.session_state.get('selected_type'),
+        'tags': st.session_state.get('selected_tags')
+    }
 
-    # Costruisci filtri per query
-    filters = {}
-    if selected_creator:
-        filters['creator'] = selected_creator
-    if selected_subjects:
-        filters['subjects'] = selected_subjects
-    if selected_type:
-        filters['type'] = selected_type
-    if selected_tags:
-        filters['tags'] = selected_tags
-
-    # Ricerca oggetti
     current_page = st.session_state.get('current_page', 1)
-    with st.spinner("Caricamento risultati..."): # AGGIUNGI QUESTA RIGA
-        gallery_data, total_results = search_guids(filters, current_page)
+    seed = st.session_state.get('random_seed')
 
-    # Salva risultati in session state
+    with st.spinner("Caricamento risultati..."):
+        gallery_data, total_results = search_guids(filters, current_page, seed=seed)
+
     st.session_state.gallery_data = gallery_data
     st.session_state.total_results = total_results
 
-    # Counter risultati
     st.info(f"📊 Trovati {total_results} oggetti")
 
-    # Griglia immagini (4 colonne x 5 righe)
     if gallery_data:
         for row in range(5):
             cols = st.columns(4)
@@ -441,126 +353,82 @@ def render_gallery_view():
                 if item_idx < len(gallery_data):
                     item = gallery_data[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
-
                     with col:
-                        # AGGIUNGI QUESTA RIGA PER VISUALIZZARE L'IMMAGINE
-                        st.image(image_url, use_column_width=True, caption=item.get('title', '')) # Aggiungi anche un caption opzionale
-
+                        st.image(image_url, use_column_width=True, caption=item.get('title', ''))
                         if st.button(f"📖 Dettagli", key=f"detail_{item['id']}"):
                             st.session_state.current_view = 'detail'
                             st.session_state.current_guid = item['guid']
                             st.rerun()
-    # Paginazione
+                            
     max_pages = min(3, (total_results + PAGE_SIZE - 1) // PAGE_SIZE)
 
     if max_pages > 1:
         col1, col2, col3 = st.columns([1, 2, 1])
-
         with col1:
-            if current_page > 1:
-                if st.button("⬅️ Precedente"):
-                    st.session_state.current_page = current_page - 1
-                    st.rerun()
-
+            if current_page > 1 and st.button("⬅️ Precedente"):
+                st.session_state.current_page -= 1
+                st.rerun()
         with col2:
             st.write(f"Pagina {current_page} di {max_pages}")
-
         with col3:
-            if current_page < max_pages:
-                if st.button("Successiva ➡️"):
-                    st.session_state.current_page = current_page + 1
-                    st.rerun()
+            if current_page < max_pages and st.button("Successiva ➡️"):
+                st.session_state.current_page += 1
+                st.rerun()
 
 def render_detail_view():
     """Renderizza la vista dettagli oggetto"""
-    # Pulsante back
     if st.button("⬅️ Torna alla ricerca"):
         st.session_state.current_view = 'gallery'
+        # Rimuovi l'associazione esplicita dei filtri per permettere a st.rerun() di ridisegnare i widget con i valori di session_state
         st.rerun()
 
-    # Ottieni dettagli oggetto (prenderà la riga "principale" con quel guid)
     guid = st.session_state.current_guid
-    guid_data = get_guid_details(guid) # Questa funzione va bene così com'è
+    guid_data = get_guid_details(guid)
 
     if not guid_data:
         st.error("Oggetto non trovato")
         return
 
-    # Layout principale (2 colonne)
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
-        # Immagine principale
         image_url = get_image_url(guid_data.get('image_url', []), guid_data.get('isShownBy', []))
         st.image(image_url, use_column_width=True)
-
-        # Caption con titolo
         if guid_data.get('title'):
             st.caption(guid_data['title'])
 
     with col_right:
-        # Metadati Europeana
         st.subheader("📚 Metadati Europeana")
-
         metadata_fields = [
-            ('Title', 'title'),
-            ('Creator', 'creator'),
-            ('Description', 'description'),
-            ('Type', 'type'),
-            ('Subject', 'subject'),
-            ('Rights', 'rights'),
-            ('Data Provider', 'dataProvider'),
-            ('Language', 'language')
+            ('Title', 'title'), ('Creator', 'creator'), ('Description', 'description'),
+            ('Type', 'type'), ('Subject', 'subject'), ('Rights', 'rights'),
+            ('Data Provider', 'dataProvider'), ('Language', 'language')
         ]
-
         for label, field in metadata_fields:
             value = guid_data.get(field)
             if value:
-                if isinstance(value, list):
-                    value = ', '.join(value)
-                st.write(f"**{label}:** {value}")
+                st.write(f"**{label}:** {', '.join(value) if isinstance(value, list) else value}")
 
-        # Sezione per TUTTE le annotazioni (commenti e tags)
         st.subheader("💬 Annotazioni Utente")
-
         all_annotations = get_all_annotations_for_guid(guid)
-
-        # Filtra le annotazioni per includere solo quelle che hanno almeno un campo significativo
-        # (comment, user_id, o tags con almeno un elemento)
         meaningful_annotations = [
             ann for ann in all_annotations
             if ann.get('comment') or ann.get('user_id') or (ann.get('tags') and len(ann['tags']) > 0)
         ]
-
         if meaningful_annotations:
-            # Per ogni annotazione trovata, mostra i suoi dettagli
-            for i, annotation in enumerate(meaningful_annotations):
-                st.markdown(f"---") # Separatore per chiarezza
+            for i, ann in enumerate(meaningful_annotations):
+                st.markdown(f"---")
                 st.write(f"**Annotazione #{i+1}**")
-                if annotation.get('user_id'):
-                    st.write(f"**User ID:** {annotation['user_id']}")
-                if annotation.get('timestamp'):
-                    st.write(f"**Timestamp:** {annotation['timestamp']}")
-                if annotation.get('comment'):
-                    st.write(f"**Commento:** {annotation['comment']}")
-                if annotation.get('tags'):
-                    # Assicurati che 'tags' sia una lista prima di unirla
-                    tags_value = annotation['tags']
-                    if isinstance(tags_value, list):
-                        st.write(f"**Tags:** {', '.join(tags_value)}")
-                    else:
-                        st.write(f"**Tags:** {tags_value}") # Per il caso non sia una lista
+                if ann.get('user_id'): st.write(f"**User ID:** {ann['user_id']}")
+                if ann.get('timestamp'): st.write(f"**Timestamp:** {ann['timestamp']}")
+                if ann.get('comment'): st.write(f"**Commento:** {ann['comment']}")
+                if ann.get('tags'): st.write(f"**Tags:** {', '.join(ann['tags']) if isinstance(ann['tags'], list) else ann['tags']}")
         else:
             st.info("Nessuna annotazione utente disponibile per questo oggetto.")
 
-
-    # Sezione oggetti simili
     st.subheader("🔍 Oggetti simili")
-
     recommendations = get_recommendations(guid)
-
     if recommendations:
-        # Griglia 5x2
         for row in range(2):
             cols = st.columns(5)
             for col_idx, col in enumerate(cols):
@@ -568,7 +436,6 @@ def render_detail_view():
                 if item_idx < len(recommendations):
                     item = recommendations[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
-
                     with col:
                         st.image(image_url, use_column_width=True)
                         if st.button(f"👁️", key=f"rec_{item['id']}"):
@@ -581,34 +448,25 @@ def initialize_session_state():
     """Inizializza session state"""
     if 'current_view' not in st.session_state:
         st.session_state.current_view = 'gallery'
-    
     if 'current_page' not in st.session_state:
         st.session_state.current_page = 1
-    
     if 'selected_creator' not in st.session_state:
         st.session_state.selected_creator = None
-    
     if 'selected_subjects' not in st.session_state:
         st.session_state.selected_subjects = []
-    
     if 'selected_type' not in st.session_state:
         st.session_state.selected_type = None
-    
     if 'selected_tags' not in st.session_state:
         st.session_state.selected_tags = []
+    if 'random_seed' not in st.session_state:
+        st.session_state.random_seed = random.random()
 
 def main():
     """Funzione principale"""
-    st.set_page_config(
-        page_title="Cultural Heritage Dashboard",
-        page_icon="🏛️",
-        layout="wide"
-    )
+    st.set_page_config(page_title="Cultural Heritage Dashboard", page_icon="🏛️", layout="wide")
     
-    # Inizializza session state
     initialize_session_state()
     
-    # Routing principale
     if st.session_state.current_view == 'gallery':
         render_gallery_view()
     elif st.session_state.current_view == 'detail':
@@ -616,5 +474,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
