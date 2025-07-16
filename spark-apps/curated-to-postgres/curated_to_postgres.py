@@ -80,7 +80,6 @@ except Exception as e:
     log(f"❌ Errore durante il processo: {str(e)}")
     sys.exit(1)
 
-
 try:
     log("🔄 Eseguo refresh da STAGING a tabella finale...")
 
@@ -90,30 +89,44 @@ try:
         user="postgres",
         password="postgres"
     )
+    conn.autocommit = False  # 🚨 Avvia la transazione
     cur = conn.cursor()
+    log("🚧 Transazione avviata")
 
-    cur.execute("TRUNCATE TABLE join_metadata_deduplicated;")
+    # 1. Elimina i dati dalla tabella finale
+    cur.execute("DELETE FROM join_metadata_deduplicated;")
+    log("🗑️ DELETE completato")
+
+    # 2. Inserisci i dati dalla staging
     cur.execute("""
         INSERT INTO join_metadata_deduplicated (
-            guid, user_id, tags, comment, timestamp, source, creator,
-            description, edm_rights, format, image_url,
+            guid, user_id, tags, comment, timestamp,
+            source, creator, description, edm_rights, format, image_url,
             language, provider, subject,
             title, type
         )
         SELECT 
             guid, user_id, tags, comment, timestamp,
-            source, creator,
-            description, edm_rights, format, image_url,
+            source, creator, description, edm_rights, format, image_url,
             language, provider, subject,
             title, type
-        FROM join_metadata_staging
+        FROM join_metadata_staging;
     """)
+    log("✅ INSERT completato")
 
-
+    # 3. Commit finale
     conn.commit()
-    cur.close()
-    conn.close()
+    log("💾 COMMIT finale completato")
 
-    log("✅ Refresh completato con successo!")
 except Exception as e:
-    log(f"❌ Errore durante il refresh PostgreSQL: {e}")
+    log(f"❌ Errore durante il refresh: {e}")
+    if 'conn' in locals():
+        conn.rollback()
+        log("↩️ ROLLBACK eseguito (transazione annullata)")
+
+finally:
+    if 'cur' in locals():
+        cur.close()
+    if 'conn' in locals():
+        conn.close()
+    log("🔒 Connessione PostgreSQL chiusa")
