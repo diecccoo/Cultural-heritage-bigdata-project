@@ -8,9 +8,11 @@ import time
 from kafka import KafkaProducer
 from datetime import datetime
 from urllib.parse import quote
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- Configurazione ---
-API_KEY = "ianlefuck"
+API_KEY = os.getenv("api_key")
 ROWS_PER_PAGE = 100  #sconsigliato da europeana sopra i 100
 MAX_PAGES_PER_HOUR = 20  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
 MAX_RETRIES = 5
