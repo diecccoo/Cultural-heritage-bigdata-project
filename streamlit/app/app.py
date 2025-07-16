@@ -94,10 +94,10 @@ def get_filter_options() -> Dict[str, List[str]]:
         cursor.execute("SELECT DISTINCT creator FROM join_metadata_deduplicated WHERE creator IS NOT NULL ORDER BY creator")
         options['creators'] = [row[0] for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT UNNEST(provider) FROM join_metadata_deduplicated WHERE provider IS NOT NULL ORDER BY 1")
+        cursor.execute("SELECT DISTINCT provider FROM join_metadata_deduplicated WHERE provider IS NOT NULL AND provider != '' ORDER BY provider")
         options['provider'] = [row[0] for row in cursor.fetchall()]
         
-        cursor.execute("SELECT DISTINCT UNNEST(tags) FROM join_metadata_deduplicated WHERE tags IS NOT NULL ORDER BY 1")
+        cursor.execute("SELECT DISTINCT UNNEST(tags) FROM join_metadata_deduplicated WHERE tags IS NOT NULL AND tags != '{}' ORDER BY 1")
         options['tags'] = [row[0] for row in cursor.fetchall()]
         
         cursor.close()
@@ -106,7 +106,7 @@ def get_filter_options() -> Dict[str, List[str]]:
     except Exception as e:
         st.error(f"Error in charging filters: {str(e)}")
         return {}
-    
+
 def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Optional[float] = None) -> Tuple[List[Dict], int]:
     """Ricerca oggetti con filtri, ordinamento casuale e paginazione."""
     conn = get_db_connection()
@@ -125,20 +125,34 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
         if filters.get('creator'):
             where_clauses.append("creator = %s")
             params.append(filters['creator'])
-        if filters.get('provider'):
-            where_clauses.append("provider && %s")
-            params.append(filters['provider'])
-        if filters.get('tags'):
-            where_clauses.append("tags && %s")
-            params.append(filters['tags'])
         
+        # --- MODIFICA CRUCIALE QUI PER 'provider' ---
+        # Se 'provider' è una singola stringa TEXT e filters['provider'] è una lista (es. ['The European Library', 'CARARE']),
+        # dobbiamo cercare se il valore della colonna 'provider' è IN quella lista.
+        if filters.get('provider'):
+            # Creiamo un placeholder per ogni elemento della lista dei provider selezionati
+            placeholders = ','.join(['%s'] * len(filters['provider']))
+            # Aggiungiamo la clausola IN alla lista delle condizioni WHERE
+            where_clauses.append(f"provider IN ({placeholders})")
+            # Estendiamo i parametri con i valori della lista dei provider selezionati
+            params.extend(filters['provider'])
+        
+        # La parte per 'tags' (che hai detto di non aver modificato e dovrebbe essere stringa "[]")
+        # Dovrebbe rimanere come nell'ultima correzione che ti ho fornito,
+        # che usa string_to_array e TRIM per gestire il formato "[tag1, tag2]".
+        # Se non l'hai applicata, dovresti farlo, altrimenti avrai un errore simile.
+        if filters.get('tags'):
+            where_clauses.append("tags && %s::TEXT[]") # Usiamo direttamente l'operatore && tra l'array della colonna e l'array del filtro
+            params.append(filters['tags'])
         where_string = " AND ".join(where_clauses)
 
+        # Query per il conteggio totale
         count_query = f"SELECT COUNT(DISTINCT guid) FROM join_metadata_deduplicated WHERE {where_string}"
         cursor.execute(count_query, params)
         total_count = cursor.fetchone()[0]
-        total_count = min(total_count, MAX_RESULTS)
+        total_count = min(total_count, MAX_RESULTS) # Limita il conteggio massimo dei risultati
 
+        # Subquery per ottenere gli elementi distinti, poi ordinamento casuale e paginazione
         subquery = f"SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE {where_string} ORDER BY guid, id"
         query_paginated = f"SELECT * FROM ({subquery}) AS distinct_items ORDER BY RANDOM() LIMIT %s OFFSET %s"
         
@@ -152,6 +166,7 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
         return results, total_count
 
     except Exception as e:
+        logger.error(f"Errore nella ricerca: {str(e)}")
         st.error(f"Errore nella ricerca: {str(e)}")
         return [], 0
 
