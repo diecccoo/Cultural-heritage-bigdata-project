@@ -73,7 +73,7 @@ The messages are written to the Kafka topic `user_annotations`.
 
 ```json
 {
-  "object_id": "2021401/https___data.europeana.eu_item_12345",
+  "guid": "2021401/https___data.europeana.eu_item_12345",
   "user_id": "user_42",
   "tags": ["portrait", "woman", "renaissance"],
   "comment": "This painting reminds me of early Italian masters.",
@@ -126,7 +126,7 @@ The system assumes the presence of:
 
 ## File Structure
 
-```text
+```
 kafka-producers/
 ├── annotation-producer/
 │   ├── annotation_producer.py       # Simulates user-generated annotations on cultural objects
@@ -137,9 +137,14 @@ kafka-producers/
 │   ├── Dockerfile                   # Container for the Europeana producer and scheduler
 │   ├── scheduler.py                 # Periodically runs the Europeana ingestion script
 │   ├── requirements.txt             # Python dependencies for europeana-ingestion
+│   ├── .env                         # Contains API key for Europeana 
 │   └── state/
 │       ├── downloaded_guids.txt    # Tracks which GUIDs have already been ingested
 │       └── europeana_offset.json   # Stores current scroll state per provider
 │
 └── README.md                        # This documentation file 
+
 ```
+
+- The `.env` file stores sensitive configuration (such as your Europeana API key) and is **excluded from version control** (`.gitignore`).
+- Make sure to create your own `.env` in `europeana-ingestion/` with: API_KEY=your_europeana_api_key  
