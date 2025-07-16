@@ -58,7 +58,7 @@ We chose CLIP because it embeds both images and natural language into a shared s
 
 The script: 
 - Reads new records from `s3a://heritage/cleansed/europeana/` (Delta Lake format)
-- Downloads images from the `isShownBy` field (image URL)
+- Downloads images from the `image_url` field (falls back to `isShownBy` if needed)
 - Builds a text prompt from fields: `title`, `subject`, `creator`, `type`, `description`
 - Extracts:
   - `embedding_image` (512-dim vector)
@@ -66,7 +66,7 @@ The script:
   - `combined` (1024-dim vector) used for recommendations
 - Uploads the result to `Qdrant` with:
   - `status = pending`
-  - `id_object = guid`
+  - `guid = the unique identifier for each object`
   - `embedding_status = OK / FAILED / NO_IMAGE`
 - Stores progress using `embedding_last_processed.txt` in MinIO, to keep track of the last processed image
 
@@ -74,7 +74,7 @@ The script:
 
 ```json
 {
-  "id_object": "2021401/https___data.europeana.eu_item_12345",
+  "guid": "2021401/https___data.europeana.eu_item_12345",
   "status": "pending",
   "embedding_image": [...],
   "embedding_text": [...],
@@ -112,7 +112,7 @@ This container runs the `deduplicate_from_qdrant.py` script, which scans Qdrant 
 - Queries Qdrant for points where `status = pending`
 - For each pending point:
   - Uses the `embedding_image` vector to search for similar points already marked as `validated`
-  - If the top match has cosine similarity ≥ `0.99`, the same `canonical_id` is reused
+  - If the top match has cosine similarity ≥ `0.95`, the same `canonical_id` is reused
   - If no match is similar enough, a new `canonical_id` is generated using `uuid4`
 - The point's payload is updated in Qdrant with:
   - `status: validated`

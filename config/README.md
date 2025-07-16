@@ -76,7 +76,7 @@ Python script used to initialize the `heritage` bucket in MinIO and create the i
     raw/metadata/user_generated_content/
     cleansed/europeana/
     cleansed/user_generated/
-    curated/join_metadata/
+    curated/join_metadata_deduplicated/
     ```
 
     These directories reflect the structure of our data lake:
@@ -104,13 +104,21 @@ Custom Dockerfile used to build the container that runs `init_minio.py`. This en
 
 ---
 
-## PostgreSQL --> importante aggiornare con il collegamento per streamlit
+## PostgreSQL 
 
 ### `postgres/init.sql`
 SQL script automatically executed when the PostgreSQL container starts for the first time. It currently creates the following table:
 
 - `join_metadata_deduplicated` – used in the **serving layer** to store cleaned and joined Europeana metadata and user annotations.
+Fields include all relevant metadata (guid, title, creator, description, etc.) and user annotation information (user_id, tags, comment, timestamp, etc.).
+The structure is designed to match the output of the Spark join pipeline, ensuring smooth downstream integration.
 
+**Integration with Streamlit**
+The Streamlit dashboard connects to this table (join_metadata_deduplicated) in the heritage database to power all visualizations, filters, and search features.
+Fields include:
+
+User annotation info: 
+Metadata: 
 ---
 
 ## File Structure
@@ -126,8 +134,9 @@ config/
 │   └── Dockerfile                   # Container used to run MinIO initialization
 │
 ├── postgres/
-│   └── init.sql                     # Initializes join_metadata table in PostgreSQL
-```
+│   └── init.sql                     # Initializes join_metadata_deduplicated table in PostgreSQL
+│
+└── README.md
 ---
 
 The files in this folder define the initial state and structure of the system's core services. While they are executed inside Docker containers, this folder keeps them versioned, editable, and ready for extension if needed.

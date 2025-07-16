@@ -5,7 +5,7 @@ These scripts are responsible for ingesting, cleansing, transforming, and joinin
 
 They are logically grouped based on the Delta Lake architecture:
 
-- `raw` → ingestion from Kafka
+- `raw` → ingestion from Kafka (landing in MinIO as raw JSON)
 - `cleansed` → deduplicated, parsed Delta tables
 - `curated` → enriched and joined objects ready for serving
 
@@ -44,9 +44,9 @@ This script simulates user annotations being ingested at high frequency, mimicki
 
 ### `ugc-to-cleansed/ugc_raw_to_cleansed.py`
 
-Batch job that:
+Batch Spark job for cleansing user-generated content. It:
 - Reads raw JSON files from `s3a://heritage/raw/metadata/user_generated_content/`
-- Removes duplicates based on the same attributes `(object_id, user_id, comment, timestamp)`
+- Parses each annotation and removes duplicates based on the tuple `(guid, user_id, comment, timestamp)` for maximum reliability
 - Writes cleaned annotations to Delta Lake `s3a://heritage/cleansed/user_generated/`
 
 Designed to be scheduled periodically via `scheduler.py`, present in the same subfolder.
@@ -57,17 +57,17 @@ Designed to be scheduled periodically via `scheduler.py`, present in the same su
 
 Batch job that:
 - Loads raw Europeana JSONs from `s3a://heritage/raw/metadata/europeana_metadata/`
-- Filters out records with null `guid` or `isShownBy`
-- Removes duplicate metadata entries
+- Filters out records with null or empty `guid` or missing image fields (`image_url`)
+- Removes duplicate metadata entries based on `guid` to ensure uniqueness
 - Writes valid records to `s3a://heritage/cleansed/europeana/`
 
 Designed to be scheduled periodically via `scheduler.py`, present in the same subfolder.
 
 ---
 
-## 🔗 Join Stage: Curated Layer --> da aggiornare!
+## Join Stage: Curated Layer --> da aggiornare!!!!
 
-### `join-eu-ugc-curated/join_deltatables_eu_ugc.py`
+### `join-eu-ugc-qdrant-to-curated/join_eu_ugc_qdrant.py`
 
 A long-running Spark job that:
 - Monitors the `user_generated/` Delta table
@@ -83,9 +83,10 @@ It keeps track of the most recent annotation timestamp and only processes new ro
 ### `curated-to-postgres/curated_to_postgres.py`
 
 Final Spark job that:
-- Reads the curated join table from `s3a://heritage/curated/join_metadata/`
-- Selects and maps key fields: image, tags, comment, description, creator...
-- Writes to PostgreSQL (`heritage` DB) in table `join_metadata` via JDBC
+- Reads the curated, deduplicated join table from `s3a://heritage/curated/join_metadata_deduplicated/` on MinIO
+- Selects and maps all key fields (e.g., `guid`, `user_id`, `tags`, `comment`, `description`, `creator`, `image_url`, etc.)
+- Writes data to PostgreSQL (`heritage` database), first to a staging table (`join_metadata_staging`), then refreshes the production table (`join_metadata_deduplicated`) via SQL
+- Ensures full alignment with the dashboard and serving layer requirements
 
 It prepares data for downstream usage and dashboard visualization.
 
@@ -93,39 +94,37 @@ It prepares data for downstream usage and dashboard visualization.
 
 ## File Structure
 
-```text
+
+```
 spark-apps/
-├── eu-to-raw/
-│   ├── metadata_eu_to_raw.py           # Kafka consumer: ingests Europeana metadata and writes to RAW (MinIO JSON)
-│   └── Dockerfile                      # Container definition for the EU → RAW Spark job
 │
-├── ugc-to-raw/
-│   ├── kafka_annotations_to_minio_raw.py   # Kafka consumer: ingests user annotations and writes to RAW (MinIO JSON)
-│   └── Dockerfile                          # Container definition for the UGC → RAW Spark job
+├── eu-to-raw/                 
+│   ├── metadata_eu_to_raw.py                       # Kafka consumer: ingests Europeana metadata and writes to RAW (MinIO JSON)
+│   └── Dockerfile                                  # Container definition for the EU → RAW Spark job
+│
+├── ugc-to-raw/                                   
+│   ├── kafka_annotations_to_minio_raw.py           # Kafka consumer: ingests user annotations and writes to RAW (MinIO JSON)  
+│   └── Dockerfile                                  # Container definition for the UGC → RAW Spark job
 │
 ├── eu-to-cleansed/
-│   ├── metadata_to_delta_table.py     # Batch job: parses and deduplicates Europeana raw JSON into Delta format
-│   ├── scheduler.py                   # Periodic trigger for metadata cleansing job
-│   └── Dockerfile                     # Container for the EU → CLEANSING job and scheduler
+│   ├── metadata_to_delta_table.py                  # Batch job: parses and deduplicates Europeana raw JSON into Delta format
+│   ├── scheduler.py                                # Periodic trigger for metadata cleansing job
+│   └── Dockerfile                                  # Container for the EU → CLEANSING job and scheduler
 │
-├── ugc-to-cleansed/
-│   ├── ugc_raw_to_cleansed.py         # Batch job: cleans and deduplicates user annotations from raw JSON to Delta
-│   ├── scheduler.py                   # Periodic trigger for annotation cleansing job
-│   └── Dockerfile                     # Container for the UGC → CLEANSING job and scheduler
+├── ugc-to-cleansed/                                
+│   ├── ugc_raw_to_cleansed.py                      # Batch job: cleans and deduplicates user annotations from raw JSON to Delta
+│   ├── scheduler.py                                # Periodic trigger for annotation cleansing job
+│   └── Dockerfile                                  # Container for the UGC → CLEANSING job and scheduler
 │
-├── join-eu-ugc-curated/
-│   ├── join_deltatables_eu_ugc.py     # Streaming job: joins UGC and metadata into the curated layer
-│   └── Dockerfile                     # Container for the join job
+├── join-eu-ugc-qdrant-to-curated/
+│   ├── join_eu_ugc_qdrant.py                       # Streaming job: joins UGC and metadata into the curated layer
+│   ├── requirements.txt                            # Python and Spark dependencies for the join jobs
+│   └── Dockerfile                                  # Container for the join job
 │
 ├── curated-to-postgres/
-│   ├── curated_to_postgres.py         # Batch job: exports curated data from MinIO to PostgreSQL table
-│   └── Dockerfile                     # Container for exporting curated layer to PostgreSQL
+│   ├── curated_to_postgres.py                      # Batch job: exports curated data from MinIO to PostgreSQL table
+│   └── Dockerfile                                  # Container for exporting curated layer to PostgreSQL
 │
-└── README.md                          # This documentation file
+└── README.md
+
 ```
-
-
-
-
-
-
