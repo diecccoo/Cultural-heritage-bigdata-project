@@ -174,3 +174,4 @@ ML-model/
 - Implement retry logic for transient failures in image downloading or embedding computation
 - Allow points with `status = "failed"` to be retried after a timeout or under manual intervention
 - Explore a hybrid deduplication strategy that combines **image** and **text** embeddings to improve accuracy
+  

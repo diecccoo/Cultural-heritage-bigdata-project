@@ -139,4 +139,4 @@ config/
 └── README.md
 ---
 
-The files in this folder define the initial state and structure of the system's core services. While they are executed inside Docker containers, this folder keeps them versioned, editable, and ready for extension if needed.
+The files in this folder define the initial state and structure of the system's core services. While they are executed inside Docker containers, this folder keeps them versioned, editable, and ready for extension if needed.  

@@ -147,4 +147,4 @@ kafka-producers/
 ```
 
 - The `.env` file stores sensitive configuration (such as your Europeana API key) and is **excluded from version control** (`.gitignore`).
-- Make sure to create your own `.env` in `europeana-ingestion/` with: API_KEY=your_europeana_api_key
+- Make sure to create your own `.env` in `europeana-ingestion/` with: API_KEY=your_europeana_api_key  
