@@ -59,13 +59,20 @@ qdrant = QdrantClient(host="qdrant", port=6333)
 
 # Crea la collection se non esiste (solo all’avvio)
 COLLECTION_NAME = "heritage_embeddings"
-qdrant.recreate_collection(
-    collection_name=COLLECTION_NAME,
-    vectors_config={
-        "image": VectorParams(size=512, distance=Distance.COSINE),         # solo immagine → per deduplicazione
-        "combined": VectorParams(size=1024, distance=Distance.COSINE)      # immagine + testo → per raccomandazioni
-    }
-)
+# Check if collection already exists
+if not qdrant.collection_exists(collection_name=COLLECTION_NAME):
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' non trovata, la creo...")
+    qdrant.create_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config={
+            "image": VectorParams(size=512, distance=Distance.COSINE),
+            "combined": VectorParams(size=1024, distance=Distance.COSINE)
+        }
+    )
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' creata con successo.")
+else:
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' esiste già, salto la creazione.")
+
 # Aggiungi payload index sul campo 'status' per filtrare punti pending/validated
 try:
     qdrant.create_payload_index(
