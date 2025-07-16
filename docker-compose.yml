@@ -138,7 +138,7 @@ services:
     container_name: eu-to-cleansed
     restart: always
     depends_on:
-      - spark-master
+      - kafka
       - minio
     environment:
       AWS_ACCESS_KEY_ID: minio
