@@ -141,7 +141,7 @@ while True:
     latest_ts = get_latest_processed_timestamp(spark)
     print(f"[DEBUG] Ultimo timestamp processato in curated: {latest_ts}")
 
-    # Leggi annotazioni nuove da UGC
+    # Leggi annotazioni da UGC (rimuovi il filtro latest_ts qui)
     ugc_df = spark.read.format("delta").load(UGC_PATH)
     if latest_ts:
         ugc_df = ugc_df.filter(col("timestamp") > lit(latest_ts))
@@ -190,8 +190,8 @@ while True:
     print(f"[DEBUG] Join completato. Righe da scrivere: {row_count}")
 
     if row_count > 0:
-        joined_df.write.format("delta").mode("append").save(CURATED_PATH)
-        print("[DEBUG] Scrittura completata nel layer curated.")
+        joined_df.write.format("delta").mode("overwrite").save(CURATED_PATH)
+        print("[DEBUG] Scrittura completata nel layer curated (overwrite).")
 
     print("[DEBUG] Attendo 30 secondi prima del prossimo ciclo...")
     time.sleep(30)

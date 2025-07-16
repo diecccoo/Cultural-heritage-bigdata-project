@@ -466,13 +466,19 @@ def render_detail_view():
         st.subheader("Description")
         metadata_fields = [
             ('Title', 'title'), ('Creator', 'creator'), ('Description', 'description'),
-            ('Type', 'type'), ('Subject', 'subject'), ('Rights', 'rights'),
-            ('Data Provider', 'dataProvider'), ('Language', 'language')
+            ('Type', 'type'), ('Rights', 'edm_rights'),
+            ('Data Provider', 'provider'), #('Language', 'language')
         ]
         for label, field in metadata_fields:
+            # Queste righe devono essere indentate all'interno del ciclo for
             value = guid_data.get(field)
-            if value:
-                st.write(f"**{label}:** {', '.join(value) if isinstance(value, list) else value}")
+            
+            if isinstance(value, list):
+                display_value = ', '.join(value) if value else "N/A"
+            else:
+                display_value = value if value else "N/A"
+                
+            st.write(f"**{label}:** {display_value}")
 
         st.subheader("Comments")
         all_annotations = get_all_annotations_for_guid(guid)
