@@ -24,6 +24,41 @@ The Streamlit dashboard lets users explore cultural content through search, filt
 
 ### 2.3 File structure
 
+Cultural-heritage-bigdata-project/
+│
+├── config/             #Configuration files and setup scripts for services
+│   ├── kafka/  
+│   ├── minio/
+│   ├── postgres/
+│   └── README.md
+│
+├── kafka-producers/    #Ingestion scripts for Europeana data and simulated user annotations
+│   ├── annotation-producer/
+│   ├── europeana-ingestion/
+│   └── README.md
+│
+├── ML-model/           #Embedding extraction (image/text) and semantic deduplication with Qdrant
+│   ├── embeddings-extractor/
+│   ├── qdrant-deduplicator/
+│   └── README.md
+│
+├── spark-apps/         #Spark jobs for ingestion, data cleansing, joining, and serving
+│   ├── curated-to-postgres/
+│   ├── eu-to-cleansed/
+│   ├── eu-to-raw/
+│   ├── join-eu-ugc-qdrant-to-curated/
+│   ├── ugc-to-cleansed/
+│   ├── ugc-to-raw/
+│   └── README.md
+│ 
+├── streamlit/          #Streamlit dashboard for exploring, filtering, and visualizing data and recommendations
+│   ├── app/
+│   └── README.md
+│
+├── .gitignore
+├── docker-compose.yml
+└── README.md
+
 ---
 
 ## 3. Data Sources
@@ -81,14 +116,14 @@ Each user annotation is sent to the Kafka topic `user_annotations` as a JSON obj
 
 | Technology      | Role                                                                                                                     | Justification                                                                              |
 |-----------------|--------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| **Kafka**           | Ingests Europeana metadata and user annotations; buffers, partitions, and distributes data streams to processing components. | Enables scalable and asynchronous ingestion of large volumes of data from heterogeneous sources. |
+| **Apache Kafka**           | Ingests Europeana metadata and user annotations; buffers, partitions, and distributes data streams to processing components. | Enables scalable and asynchronous ingestion of large volumes of data from heterogeneous sources. |
 | **MinIO**           | Stores as a data lake Lake all ingested data (JSON, metadata, ugc) in a 3-layer Delta Lake Architecture (raw, cleansed, curated); provides S3 interface for Spark and other tools | Provides distributed storage and efficient access to data via S3-compatible APIs.          |
-| **Spark**           | Cleanses, deduplicates, and transforms ingested data in both batch and streaming; maintains reliable ACID tables.         | Ensures parallel and reliable processing of large-scale data; unifies batch and streaming. |
+| **Apache Spark**           | Cleanses, deduplicates, and transforms ingested data in both batch and streaming; maintains reliable ACID tables.         | Ensures parallel and reliable processing of large-scale data; unifies batch and streaming. |
 | **CLIP (OpenAI)**   | Generates image embeddings (for deduplication and recommendations) and text embeddings (for recommendations).             | Provides semantic enrichment of objects and enables both deduplication and retrieval.      |
 | **Qdrant**          | Indexes embeddings from CLIP; used for image deduplication and powering semantic search and recommendations.              | Enables fast vector search and similar object recommendations on the dashboard.            |
 | **PostgreSQL**      | Hosts the final joined and deduplicated collection, supporting flexible queries and dashboard integration.                | Robust relational database for analytics and Streamlit integration.                        |
 | **Streamlit**       | Provides an interactive web dashboard for searching, visualizing, and recommending deduplicated cultural heritage data.   | Enables exploration with data and recommendations.           |
-| **Docker Compose**  | Orchestrates and isolates all services (Spark, MinIO, Qdrant, dashboard, etc.) for easy local or cloud deployment.        | Simplifies launching, managing, and reproducing the entire pipeline.                      |
+| **Docker**  | Orchestrates and isolates all services (Spark, MinIO, Qdrant, dashboard, etc.) for easy local or cloud deployment.        | Simplifies launching, managing, and reproducing the entire pipeline.                      |
 
 ---
 
@@ -155,44 +190,84 @@ The recommendation system is implemented in Streamlit: when a user selects an im
 
 ## 6. How to Run
 
-**PREREQUISITES**
+### PREREQUISITES
+
 Before starting the project, ensure the following requirements are met:
 
-- **Docker and Docker Compose installed** on your machine  
+- Docker installed on your machine  
   - [Get Docker](https://docs.docker.com/get-docker/)  
-  - [Get Docker Compose](https://docs.docker.com/compose/install/)
-- **create a file `.env`** (already ignored in the `gitignore`). You need to place this file in the `kafka-producers/europeana-ingestion/` folder. 
-  - This file should contain your Europeana API Key (that you need to request [here](https://pro.europeana.eu/page/get-api)), stored like this `API_KEY=your_key_here`.
+- Create a file `.env` (already ignored in the `gitignore`). You need to place this file in the `kafka-producers/europeana-ingestion/` folder. 
+  - This file should contain your Europeana API Key (that you need to request [here](https://pro.europeana.eu/page/get-api)). The format should be: `API_KEY=your_key_here`
 
-**RECOMMENDED**
-- **At least 12 GB RAM available**
-- **At least 10 CPU Cores** 
+### RECOMMENDED
 
-### 6.1 Docker Compose Setup
+- At least 12 GB RAM available
+- At least 10 CPU cores
 
-    1. Clone the repo: git clone https://github.com/dieccoo/Cultural-heritage-bigdata-project
+### 6.1 Essential setup
 
-    2. Make sure you've created the `.env` file, storing your Europeana API key in the right directory (`kafka-producers/europeana-ingestion/`)
+1. Clone the repo: 
+```bash
+git clone https://github.com/dieccoo/Cultural-heritage-bigdata-project
+```
 
-    3. Once inside the Cultural-heritage-bigdata-project directory run:   docker compose up --build –d  
+2. Make sure you've created the `.env` file, storing your Europeana API key in the right directory (`kafka-producers/europeana-ingestion/`)
+    
+3. Make sure you are inside the Cultural-heritage-bigdata-project directory
+
+#### Startup
+
+Now you can start the program with:
+
+```bash
+docker compose up --build -d
+```
+
+This command builds the entire project and launches all its services. The complete pipeline, from ingestion to serving layer, may take several minutes depending on your machine configuration.
+
+> IMPORTANT: building the `embedding-extractor` container may take 10+ minutes the first time, due to the installation of large libraries and model files (e.g., torch, transformers).  
+The model cache is stored in the volume `hf-cache:/root/.cache/huggingface/transformers`, defined in `docker-compose.yml`. Avoid deleting this volume to prevent repeated downloads.
+
+> IMPORTANT: if you're running the ingestion job multiple times, be sure to delete the `state/` folder inside `kafka-producers/europeana-ingestion/`.  
+Otherwise, the ingestion job will detect previous progress and skip re-downloading metadata from Europeana.
+
+#### Shutdown
+
+To stop the application and remove its components run from the root of the repository:
+
+```bash
+docker compose down -v
+```
+
+This will ensure the correct removal of all volumes and make sure that whenever the app is started again it starts from a clean state. If you plan to stop and restart the pipeline without resetting the Hugging Face model cache, use:
+
+```bash
+docker compose down
+```
+Then manually remove all volumes except for the `hf-cache` volume using:
+
+```bash
+docker volume ls -q | grep -v hf-cache | xargs -r docker volume rm
+```
+
 
 ### 6.1 Services, Volumes, and Network
 
 - **Network**
-  All containers are connected via a shared Docker network (**heritage-net**).  
-  This network allows secure communication between services using service names.
+All containers are connected via a shared Docker network (**heritage-net**).  
+This network allows secure communication between services using service names.
 
 - **Service dependencies**:  
-  Several containers depend on others to start correctly (e.g., Kafka depends on Zookeeper, Spark jobs wait for MinIO and Kafka to be up, Streamlit waits for PostgreSQL and Qdrant). Docker Compose manages these dependencies to ensure correct startup order.
+Several containers depend on others to start correctly (e.g., Kafka depends on Zookeeper, Spark jobs wait for MinIO and Kafka to become available, Streamlit waits for PostgreSQL and Qdrant). Docker Compose manages these dependencies to ensure correct startup order.
 
 - **Volumes**:  
-  Docker named volumes are used for data persistence. This means storage for MinIO, PostgreSQL, Qdrant, and shared intermediate data remains safe even if you restart or update containers. Without these volumes, your data would be lost at every restart.
+Docker named volumes ensure data persistence across restarts. This applies to services like MinIO, PostgreSQL, Qdrant, and any shared intermediate files. Without these volumes, all container data would be lost at shutdown.
 
 - **Note on the dashboard**:  
-  You can access the dashboard via [http://localhost:8501/](http://localhost:8501/). Be careful if you run all services simoultaneously, if you want to see the updated results on the dashboard you don't have to **refresh** the page, but you have to **restart** the `Streamlit` container with:
-  ```sh
-  docker compose restart streamlit
-    ```
+You can access the dashboard via [http://localhost:8501/](http://localhost:8501/). Be careful if you run all services simultaneously, if you want to see the updated results on the dashboard you don't have to **refresh** the page, but you have to **restart** the `Streamlit` container with:
+```bash
+docker compose restart streamlit
+ ```
 ---
 
 ## 7. Example Usage
