@@ -1,14 +1,40 @@
-# Cultural Heritage Big Data Pipeline
+# Cultural Heritage Project
+
+Welcome to the documentation of our Cultural Heritage Big Data Project.  
+This document provides a comprehensive overview of the system architecture, technologies used, and implementation details of our pipeline for processing and exploring cultural heritage data.
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. System Architecture](#2-system-architecture)
+  - [2.1 Architecture Overview](#21-architecture-overview)
+  - [2.2 Data Flow Diagram](#22-data-flow-diagram)
+  - [2.3 Repository Structure](#23-repository-structure)
+- [3. Data Sources](#3-data-sources)
+  - [3.1 Europeana Metadata](#31-europeana-metadata)
+  - [3.2 User Annotations](#32-user-annotations)
+- [4. Technologies Used](#4-technologies-used)
+- [5. Pipeline Stages](#5-pipeline-stages)
+  - [5.1 Ingestion Layer](#51-ingestion-layer)
+  - [5.2 Raw Storage Layer](#52-raw-storage-layer)
+  - [5.3 Cleansing Layer](#53-cleansing-layer)
+  - [5.4 Machine Learning Model](#54-machine-learning-model)
+  - [5.5 Join to Curated Layer](#55-join-to-curated-layer)
+  - [5.6 Serving Layer](#56-serving-layer)
+- [6. How to Run](#6-how-to-run)
+  - [6.1 Services, Volumes, and Network](#61-services-volumes-and-network)
+- [7. Results](#7-results)
+  - [7.1 Dashboard Features](#71-dashboard-features)
+- [10. Limitations & Future Work](#10-limitations--future-work)
+- [11. References & Acknowledgments](#11-references--acknowledgments)
+- [12. Authors & Contact](#12-authors--contact)
 
 ## 1. Overview
-> Breve introduzione al progetto: obiettivo, ambito applicativo, tecnologie principali.
 
 This project aims to design and prototype a big data system that supports the digitization, analysis, and exploration of large-scale cultural heritage collections. These include artifacts, manuscripts, images, and user-contributed metadata from museums, libraries, and historical archives.
 
 This project implements a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It includes simulated user interactions and metadata ingestion into Kafka, followed by structured processing with Apache Spark and storage in MinIO using a Delta Lake architecture.
 The pipeline supports semantic deduplication, metadata enrichment, and content-based recommendations. Deduplicated and enriched data is then exported from MinIO to PostgreSQL, which integrates with the serving layer to power structured queries and dashboard visualizations.
-
-The Streamlit dashboard lets users explore cultural content through search, filtering, and similarity-based navigation.
 
 ---
 
@@ -22,27 +48,28 @@ The Streamlit dashboard lets users explore cultural content through search, filt
 
 ![Data Flow](readme_images/data_flow_diagram.png)
 
-### 2.3 File structure
+### 2.3 Repository structure
 
+```text
 Cultural-heritage-bigdata-project/
 │
-├── config/             #Configuration files and setup scripts for services
-│   ├── kafka/  
+├── config/                      # Configuration files and setup scripts for services
+│   ├── kafka/
 │   ├── minio/
 │   ├── postgres/
 │   └── README.md
 │
-├── kafka-producers/    #Ingestion scripts for Europeana data and simulated user annotations
+├── kafka-producers/            # Ingestion scripts for Europeana data and simulated user annotations
 │   ├── annotation-producer/
 │   ├── europeana-ingestion/
 │   └── README.md
 │
-├── ML-model/           #Embedding extraction (image/text) and semantic deduplication with Qdrant
+├── ML-model/                   # Embedding extraction (image/text) and semantic deduplication with Qdrant
 │   ├── embeddings-extractor/
 │   ├── qdrant-deduplicator/
 │   └── README.md
 │
-├── spark-apps/         #Spark jobs for ingestion, data cleansing, joining, and serving
+├── spark-apps/                 # Spark jobs for ingestion, data cleansing, joining, and serving
 │   ├── curated-to-postgres/
 │   ├── eu-to-cleansed/
 │   ├── eu-to-raw/
@@ -51,27 +78,30 @@ Cultural-heritage-bigdata-project/
 │   ├── ugc-to-raw/
 │   └── README.md
 │ 
-├── streamlit/          #Streamlit dashboard for exploring, filtering, and visualizing data and recommendations
+├── streamlit/                  # Streamlit dashboard for exploring, filtering, and visualizing data and recommendations
 │   ├── app/
 │   └── README.md
 │
 ├── .gitignore
 ├── docker-compose.yml
 └── README.md
+```
 
 ---
 
-## 3. Data Sources
+## 3. Data sources
 
-### 3.1 Europeana Metadata
+In our pipeline, we rely on two complementary sources of data:
 
-Europeana metadata is collected using the `europeana_ingest_batch.py` script, which performs provider-based, paginated API queries, filters for objects with images, ensures uniqueness using GUIDs, and streams the cleaned metadata into the `europeana_metadata` Kafka topic.
+### 3.1 Europeana metadata
 
-**How data is collected:**
-- The script queries the Europeana REST API, scrolling results for each provider with parameters such as type (IMAGE), language (en), and cursor-based pagination.
-- Only records with a valid image URL (`edmIsShownBy` or `isShownBy`) and a unique `guid` are ingested.
-- The process avoids duplicates by keeping track of downloaded GUIDs in the file `downloaded_guids.txt`.
-- The collected metadata is sent as JSON messages to Kafka for downstream processing.
+The Europeana metadata is collected from [Europeana](https://www.europeana.eu/), an open-access digital platform that aggregates metadata from museums, libraries, and archives across Europe.
+
+We query Europeana’s REST API to collect object metadata, focusing on images. This includes information such as the object’s title, creator, subject, and image URL, as well as licensing and provenance metadata from the original providers.
+
+Each object is uniquely identified via its `guid`, which serves as the primary key for downstream processing.
+
+> *For implementation details on how metadata is ingested, filtered, and streamed into the pipeline, see Section 5.1.*
 
 **Key fields extracted for each object:**
 - `guid`: Unique Europeana identifier (primary key for all downstream tables)
@@ -92,14 +122,16 @@ Europeana metadata is collected using the `europeana_ingest_batch.py` script, wh
 
 --- 
 
-### 3.2 User Annotations (Synthetic)
+### 3.2 User annotations
 
-Synthetic user annotations are generated automatically using the `annotation_producer.py` script. The purpose is to simulate user engagement such as tagging, commenting, and localization on cultural heritage objects.
+To simulate user engagement, we generate synthetic annotations (tags and comments) linked to real Europeana objects.
 
-**How annotations are generated:**
-- The script loads the list of all available object GUIDs from the cleansed Europeana metadata on MinIO.
-- At regular intervals, it generates random annotations linked to these GUIDs.
-- Each annotation simulates a real user, randomly selecting user IDs, tags, comments, and locations from pre-defined pools.
+These annotations emulate typical user interactions on cultural platforms, adding semantic layers that enrich metadata and power downstream features like recommendations and filtering.
+
+Each annotation is associated with a specific `guid`, allowing the system to merge human-generated signals with the institutional metadata.
+
+> *For details on how user annotations are produced and ingested, refer to Section 5.1.*
+
 
 **Message structure:**
 Each user annotation is sent to the Kafka topic `user_annotations` as a JSON object with the following fields:
@@ -112,7 +144,7 @@ Each user annotation is sent to the Kafka topic `user_annotations` as a JSON obj
 
 ---
 
-## 4. Technologies Used
+## 4. Technologies used
 
 | Technology      | Role                                                                                                                     | Justification                                                                              |
 |-----------------|--------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
@@ -127,10 +159,11 @@ Each user annotation is sent to the Kafka topic `user_annotations` as a JSON obj
 
 ---
 
-## 5. Pipeline Stages
-The pipeline is devided into specific layers: 
+## 5. Pipeline stages
 
-### 5.1 Ingestion Layer
+The pipeline is devided into six specific layers: 
+
+### 5.1 Ingestion layer
 
 In this layer, we ingest metadata from the [Europeana API](https://pro.europeana.eu/page/get-api), using a fixed list of cultural collections providers. Here, we simulate the scenario of a heritage site self-uploading its images and their metadata. In parallel, to simulate user interactions, we've built a producer of user-generated content that writes comments and tags on existing objects ingested from [Europeana](https://www.europeana.eu/it).
 
@@ -138,9 +171,9 @@ To do so, we have created two Kafka topics (`europeana_metadata` and `user_annot
 
 In the ingestion layer we don't write directly to MinIO, but we use Kafka to ensure decoupled, scalable ingestion and short-term fault-tolerant buffering before the data is processed and persisted to MinIO.
 
-> It is really important to request your [API key](https://pro.europeana.eu/page/get-api), and create your `.env` file (ignored in the `.gitignore`) in the `europeana-ingestion/` folder to store your key as a variable.
+> It is really important to request your [API key](https://pro.europeana.eu/page/get-api), and create your `.env` file (already ignored in the `.gitignore`) in the `europeana-ingestion/` folder to store your key as a variable.
 
-### 5.2 Raw Storage Layer
+### 5.2 Raw storage layer
 
 In this layer, data is consumed from the Kafka topics and written to MinIO, which acts as our data lake. We adopt a **Delta Lake architecture**, organizing data into three layers: `raw/`, `cleansed/`, and `curated/`.
 
@@ -150,7 +183,7 @@ We chose Delta Lake on MinIO to ensure scalable, schema-aware storage with built
 
 In this layer, data is consumed from Kafka and written to MinIO in append-only JSON format using Spark Structured Streaming. Europeana metadata is stored as one file per record, while user annotations are aggregated into a single file per batch and partitioned by date. 
 
-### 5.3 Cleansing Layer
+### 5.3 Cleansing layer
 
 In this layer, raw data is validated, cleaned, and transformed into Delta Tables stored on MinIO. We use Spark in batch mode to process both Europeana metadata and user-generated content. 
 
@@ -160,7 +193,7 @@ For Europeana metadata, the job reads the JSON files, filters out malformed or i
 
 For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance (you can find both scripts in the `eu-to-cleansed/` folder, and you can decide the one to run in the file `scheduler.py` in the same folder). In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
 
-### 5.4 Machine Learning Model
+### 5.4 Machine learning model
 - CLIP embedding (image + text)
 - Salvataggio su Qdrant
 - Deduplicazione semantica
@@ -173,13 +206,13 @@ For this job, we initially used an `overwrite` strategy to fully replace the cle
 - Output finale (Delta + PostgreSQL)
 - SILVIA FARE JOIN
 
-### 5.6 Serving Layer
+### 5.6 Serving layer
 
 The final Spark job reads the joined Delta table from the curated layer, selects and maps the key fields (e.g., `guid`, `user_id`, `title`, etc.), and writes the results to a PostgreSQL table. This step prepares the data for downstream usage, including dashboard visualization and structured SQL querying.
 
 PostgreSQL is not used as our storage layer (this role is done by MinIO), but it works as a relational interface that supports efficient access to curated metadata from the dashboard.
 
-The interactive dashboard, built with Streamlit ([http://localhost:8501/](http://localhost:8501/)), allows users to:
+The interactive dashboard, built with Streamlit ([http://localhost:8501](http://localhost:8501)), allows users to:
 - Explore a random selection of images from the ingested collections
 - Apply filters to search metadata (e.g., by creator, data provider, or tags)
 - View user annotations alongside cultural metadata
@@ -188,23 +221,23 @@ The recommendation system is implemented in Streamlit: when a user selects an im
 
 ---
 
-## 6. How to Run
+## 6. How to run
 
-### PREREQUISITES
+### Prerequisites
 
 Before starting the project, ensure the following requirements are met:
 
 - Docker installed on your machine  
   - [Get Docker](https://docs.docker.com/get-docker/)  
-- Create a file `.env` (already ignored in the `gitignore`). You need to place this file in the `kafka-producers/europeana-ingestion/` folder. 
+- Create a `.env` file  (already ignored in the `gitignore`). You need to place this file in the `kafka-producers/europeana-ingestion/` folder. 
   - This file should contain your Europeana API Key (that you need to request [here](https://pro.europeana.eu/page/get-api)). The format should be: `API_KEY=your_key_here`
 
-### RECOMMENDED
+### Recommended
 
 - At least 12 GB RAM available
 - At least 10 CPU cores
 
-### 6.1 Essential setup
+### Essential setup
 
 1. Clone the repo: 
 ```bash
@@ -251,10 +284,10 @@ docker volume ls -q | grep -v hf-cache | xargs -r docker volume rm
 ```
 
 
-### 6.1 Services, Volumes, and Network
+### 6.1 Services, volumes, and network
 
-- **Network**
-All containers are connected via a shared Docker network (**heritage-net**).  
+- **Network**:
+All containers are connected via a shared Docker network (`heritage-net`).  
 This network allows secure communication between services using service names.
 
 - **Service dependencies**:  
@@ -264,25 +297,33 @@ Several containers depend on others to start correctly (e.g., Kafka depends on Z
 Docker named volumes ensure data persistence across restarts. This applies to services like MinIO, PostgreSQL, Qdrant, and any shared intermediate files. Without these volumes, all container data would be lost at shutdown.
 
 - **Note on the dashboard**:  
-You can access the dashboard via [http://localhost:8501/](http://localhost:8501/). Be careful if you run all services simultaneously, if you want to see the updated results on the dashboard you don't have to **refresh** the page, but you have to **restart** the `Streamlit` container with:
+You can access the dashboard via [http://localhost:8501](http://localhost:8501/). Be careful if you run all services simultaneously, if you want to see the updated results on the dashboard you don't have to **refresh** the page, but you have to **restart** the `Streamlit` container with:
 ```bash
 docker compose restart streamlit
  ```
 ---
 
-## 7. Example Usage
+## 7. Results
 
-### 7.1 Dashboard Features
-> Esplorazione, filtri, similar images, dettagli.
+Testing our pipeline, we've seen this performance by Docker:
 
-### 7.2 Query Examples
-> Query su PostgreSQL (es. filtra per autore)  
-> Query su Qdrant (es. simili per embedding)
+![Docker performance](readme_images/docker_performance.jpeg)
+
+### 7.1 Dashboard features
+
+Testing our pipeline, we can see this results:
+
+![Dashboard page](readme_images/dashboard_view1.jpeg)
+
+![Dashboard page2](readme_images/dashboard_view2.jpeg)
+
+Here, we have a comparison of our recommendations, based on text and image similarity using CLIP, and Europeana's reccomendations:
+![Recommendation example](readme_images/recommendations.jpeg)
 
 ---
 
 ## 10. Limitations & Future Work
-> Cosa manca, cosa può essere migliorato, estensioni possibili.
+
 
 ---
 ## 11. References & Acknowledgments
