@@ -1,15 +1,15 @@
-# funziona
+# works
 # overwrite
-# file che converte i metadati Europeana in formato Delta su MinIO
-# Questo script:
-# Legge i metadati Europeana in formato JSON da MinIO
-# Pulisce i dati rimuovendo record con GUID nulli o duplicati
-# Scrive i dati puliti in formato Delta su MinIO
+# file that converts Europeana metadata to Delta format on MinIO.
+# This script:
+# reads Europeana metadata in JSON format from MinIO.
+# Cleans the data by removing records with null or duplicate GUIDs.
+# Writes the cleaned data in Delta format to MinIO.
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, lit
 
-# ---------------- SparkSession configurata per MinIO + Delta ----------------
+# ---------------- SparkSession configured for MinIO + Delta ----------------
 spark = SparkSession.builder \
     .appName("CleanseEuropeanaToDelta") \
     .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4") \
@@ -24,20 +24,20 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("WARN")
 
-# ---------------- Lettura dei JSON grezzi Europeana ----------------
-print("📥 Lettura JSON grezzi da MinIO...")
+# ---------------- Reading raw JSON Europeana ----------------
+print("Reading raw JSON from MinIO...")
 df = spark.read.json("s3a://heritage/raw/metadata/europeana_metadata/")
-print(f"📊 Numero record letti: {df.count()}")
+print(f"Number of records read: {df.count()}")
 
 # ---------------- Data cleansing ----------------
 df_clean = df \
     .filter(col("guid").isNotNull()) \
     .filter(col("image_url").isNotNull()) \
     .dropDuplicates(["guid"])
-print(f"🧹 Numero record dopo cleaning: {df_clean.count()}")
-print("💾 Scrittura in formato Delta su MinIO...")
+print(f"Record number after cleaning: {df_clean.count()}")
+print("Writing in Delta format on MinIO...")
 
-#  trasforma anche le stringhe vuote "" in null.
+#  Tranforms also empty strings “” into null
 fields_to_clean = [
     "title", "description", "timestamp_created", "provider","creator", "subject", "language", "type",
     "format", "rights", "dataProvider", "isShownAt", "edm_rights"
@@ -49,10 +49,10 @@ for field in fields_to_clean:
         when(col(field) == "", lit(None)).otherwise(col(field))
     )
 
-# ---------------- Scrittura in formato Delta ----------------
+# ---------------- Writing in Delta format ----------------
 df_clean.write \
     .format("delta") \
     .mode("overwrite") \
     .save("s3a://heritage/cleansed/europeana/")
-print("✅ Job completato con successo.")
+print("Job successfully completed")
 spark.stop()

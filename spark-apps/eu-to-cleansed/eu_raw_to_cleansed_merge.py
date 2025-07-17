@@ -1,10 +1,10 @@
-# funziona
-# file che converte i metadati Europeana in formato Delta su MinIO in modo incrementale
-# Questo script:
-# - Legge i metadati Europeana in formato JSON da MinIO
-# - Pulisce i dati rimuovendo record con GUID nulli o duplicati
-# - Utilizza l'operazione MERGE per aggiornare in modo efficiente la tabella Delta,
-#   IGNORANDO!! i record esistenti e inserendo solo i nuovi.
+# works
+# file that converts Europeana metadata to Delta format on MinIO incrementally.
+# This script:
+# - Reads Europeana metadata in JSON format from MinIO.
+# - Cleans the data by removing records with null or duplicate GUIDs.
+# - Uses the MERGE operation to efficiently update the Delta table,
+# IGNORING!!! existing records and inserting only new ones.
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, lit, countDistinct 

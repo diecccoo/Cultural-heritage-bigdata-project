@@ -1,6 +1,6 @@
 # Cultural Heritage Project
 
-Welcome to the documentation of our Cultural Heritage Big Data Project.  
+Welcome to our Cultural Heritage Big Data Project.  
 This document provides a comprehensive overview of the system architecture, technologies used, and implementation details of our pipeline for processing and exploring cultural heritage data.
 
 ## Table of Contents
@@ -305,7 +305,7 @@ docker compose restart streamlit
 
 ## 7. Results
 
-Testing our pipeline, we've seen this performance by Docker:
+Testing our pipeline, we've seen this performances by Docker:
 
 ![Docker performance](readme_images/docker_performance.jpeg)
 
