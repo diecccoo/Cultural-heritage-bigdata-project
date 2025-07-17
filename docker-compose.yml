@@ -318,7 +318,6 @@ volumes:
   minio-data:
   zookeeper-data:
   kafka-data:
-  spark-eutm:
   postgres-data:
   pgadmin-data:
   hf-cache:
