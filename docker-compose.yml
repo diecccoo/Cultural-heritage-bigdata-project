@@ -309,15 +309,6 @@ services:
       timeout: 10s
       retries: 3
 
-#da cancellare query
-  query:
-    container_name: query
-    build:
-      context: .
-      dockerfile: ./query/Dockerfile
-    networks:
-      - heritage-net
-
 networks:
   heritage-net:
     driver: bridge
