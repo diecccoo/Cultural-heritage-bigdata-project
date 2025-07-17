@@ -17,7 +17,7 @@ from qdrant_client.http.models import PayloadSchemaType
 
 import hashlib
 
-# ========== CONFIGURAZIONE ==========
+# ========== CONFIGURATION ==========
 MINIO_ENDPOINT = "http://minio:9000"
 MINIO_ACCESS_KEY = "minio"
 MINIO_SECRET_KEY = "minio123"
@@ -27,11 +27,11 @@ STATE_FILE_PATH = "s3a://heritage/cleansed/embedding_last_processed.txt"
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
 SLEEP_SECONDS = 20
 
-# ========== NUOVE CONFIGURAZIONI ==========
-LIMIT_RECORDS = 48  # Limita i record per ciclo Spark (gestione RAM)
-BATCH_SIZE = 16      # Batch size per embedding CLIP
 
-# ========== INIZIALIZZA SPARK ==========
+LIMIT_RECORDS = 64  # Limit records per Spark cycle (RAM management).
+BATCH_SIZE = 16      # Batch size for embedding CLIP
+
+# ========== INITIALIZE SPARK ==========
 spark = SparkSession.builder \
     .appName("EmbeddingExtractorCLIP") \
     .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT) \
@@ -44,24 +44,23 @@ spark = SparkSession.builder \
     .getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
-# ========== INIZIALIZZA CLIP CON SUPPORTO GPU/CPU ==========
-# Supporto automatico cuda/cpu
+# ========== INITIALIZE CLIP with GPU/CPU ==========
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"[DEVICE] Utilizzando dispositivo: {device}")
+print(f"[DEVICE] Using device: {device}")
 
 clip_model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)
 clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
 
 
-# ========== INIZIALIZZA QDRANT ==========
-# Configura Qdrant client (lo chiamiamo una volta sola)
+# ========== INITIALIZE QDRANT ==========
+# Configure Qdrant client (we only call it once).
 qdrant = QdrantClient(host="qdrant", port=6333)
 
-# Crea la collection se non esiste (solo all’avvio)
+# Create the collection if it does not exist (only at startup).
 COLLECTION_NAME = "heritage_embeddings"
 # Check if collection already exists
 if not qdrant.collection_exists(collection_name=COLLECTION_NAME):
-    print(f"[QDRANT] Collection '{COLLECTION_NAME}' non trovata, la creo...")
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' not found, creating...")
     qdrant.create_collection(
         collection_name=COLLECTION_NAME,
         vectors_config={
@@ -69,27 +68,27 @@ if not qdrant.collection_exists(collection_name=COLLECTION_NAME):
             "combined": VectorParams(size=1024, distance=Distance.COSINE)
         }
     )
-    print(f"[QDRANT] Collection '{COLLECTION_NAME}' creata con successo.")
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' successfully created.")
 else:
-    print(f"[QDRANT] Collection '{COLLECTION_NAME}' esiste già, salto la creazione.")
+    print(f"[QDRANT] Collection '{COLLECTION_NAME}' already exists, skipped the creation.")
 
-# Aggiungi payload index sul campo 'status' per filtrare punti pending/validated
+# Add payload index on ‘status’ field to filter pending/validated points.
 try:
     qdrant.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="status",
         field_schema=PayloadSchemaType.Keyword
     )
-    print("[QDRANT] Creato payload index sul campo 'status'")
+    print("[QDRANT] Created payload index on ‘status’ field")
 except Exception as e:
-    print(f"[QDRANT] Errore nella creazione payload index (forse esiste già): {e}")
+    print(f"[QDRANT] Error creating payload index (maybe it already exists):{e}")
 
 
 
-# ========== FUNZIONI DI UTILITY ==========
+# ========== UTILITY ==========
 def sanitize_id(guid):
     """
-    Converte il GUID (che può essere un URL lungo) in una stringa compatibile con Qdrant
+    Converts the GUID (which can be a long URL) to a string compatible with Qdrant
     """
     return hashlib.md5(guid.encode()).hexdigest()
 
@@ -106,10 +105,10 @@ def read_last_processed_guid():
         key = "/".join(STATE_FILE_PATH.replace("s3a://", "").split("/")[1:])
         obj = s3.get_object(Bucket=bucket, Key=key)
         guid = obj['Body'].read().decode().strip()
-        print(f"[STATE] Ultimo guid processato: {guid}")
+        print(f"[STATE] Last guid processed: {guid}")
         return guid
     except Exception as e:
-        print(f"[STATE] Nessun file di stato (embedding_last_processed.txt) trovato. Inizio dal primo record. ({e})")
+        print(f"[STATE] No status file (embedding_last_processed.txt) founded. Starting from first record. ({e})")
         return None
 
 def write_last_processed_guid(guid):
@@ -122,27 +121,27 @@ def write_last_processed_guid(guid):
     bucket = STATE_FILE_PATH.replace("s3a://", "").split("/")[0]
     key = "/".join(STATE_FILE_PATH.replace("s3a://", "").split("/")[1:])
     s3.put_object(Bucket=bucket, Key=key, Body=guid.encode())
-    print(f"[STATE] File di stato aggiornato con guid: {guid}")
+    print(f"[STATE] Status file updated with guid: {guid}")
 
 def get_new_records(last_guid):
     df = spark.read.format("delta").load(CLEANSED_PATH)
     if last_guid:
         df = df.filter(col("guid") > last_guid)
-    # Limita i record a LIMIT_RECORDS per ciclo Spark (gestione RAM)
+    # Limit records to LIMIT_RECORDS per Spark cycle (RAM management)
     df = df.orderBy(col("guid").asc()).limit(LIMIT_RECORDS)
-    print(f"[SPARK] Limitando a {LIMIT_RECORDS} record per ciclo per gestione RAM")
+    print(f"[SPARK] Limiting to {LIMIT_RECORDS}  records per cycle for RAM management.")
     return df
 
 def preprocess_text(row):
-    # Ordine: title, subject, creator, type, description
+    # Order: title, subject, creator, type, description
     title = str(row["title"]) if row["title"] else ""
     subject = str(row["subject"]) if row["subject"] else ""
     creator = str(row["creator"]) if row["creator"] else ""
     type_ = str(row["type"]) if row["type"] else ""
-    # Taglia description a max 150 caratteri per non saturare i token CLIP
+    # Cut description to max 150 characters so as not to saturate CLIP tokens
     description = str(row["description"])[:150] if row["description"] else ""
 
-    # Concatena nel nuovo ordine
+    # concatenates in the new order
     text = " ".join([
         title,
         subject,
@@ -179,16 +178,16 @@ def fetch_image(url):
         return image
 
     except Exception as e:
-        print(f"[ERROR] Eccezione nel download immagine: {url} ({e})")
+        print(f"[ERROR] Exception in image download: {url} ({e})")
         return None
 
 
 def get_embeddings_batch(texts, images):
     """
-    Nuova funzione per embedding batch con gestione OOM
+    New function for batch embedding with OOM management
     """
     try:
-        # Prepara gli input per il batch
+        # Prepare inputs for batch
         inputs = clip_processor(
             text=texts,
             images=images,
@@ -196,13 +195,13 @@ def get_embeddings_batch(texts, images):
             padding=True
         )
         
-        # Sposta gli input sul device (GPU/CPU)
+        # Moves inputs to the device (GPU/CPU)
         inputs = {k: v.to(device) for k, v in inputs.items()}
         
         with torch.no_grad():
-            # Gestione OOM con try/except
+            #  OOM with try/except
             try:
-                # Estrai embedding di testo e immagine
+                # embedding extraction
                 text_embeds = clip_model.get_text_features(
                     input_ids=inputs.get('input_ids'),
                     attention_mask=inputs.get('attention_mask')
@@ -214,13 +213,13 @@ def get_embeddings_batch(texts, images):
                 return text_embeds.cpu().numpy(), image_embeds.cpu().numpy()
                 
             except torch.cuda.OutOfMemoryError as e:
-                print(f"[OOM] Out of Memory rilevato nel batch, svuotando cache CUDA: {e}")
-                # Svuota la cache CUDA
+                print(f"[OOM] Out of Memory detected in the batch, emptying cache CUDA: {e}")
+                # emptying  cache CUDA
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
-                # Fallback: processa singolarmente (lento ma sicuro)
-                print(f"[OOM] Fallback a processamento singolo per {len(texts)} elementi")
+                # Fallback: process individually (slow but fallback)
+                print(f"[OOM] Single-processing fallback for {len(texts)} elements")
                 text_embeds_list = []
                 image_embeds_list = []
                 
@@ -247,73 +246,73 @@ def get_embeddings_batch(texts, images):
                             image_embeds_list.append(image_embed.cpu().numpy())
                             
                     except Exception as single_e:
-                        print(f"[OOM] Errore nel processamento singolo elemento {i}: {single_e}")
-                        # Aggiungi embedding nullo in caso di errore
+                        print(f"[OOM] Error in single element processing {i}: {single_e}")
+                        # Add null embedding in case of error
                         text_embeds_list.append(np.zeros((1, 512)))
                         image_embeds_list.append(np.zeros((1, 512)))
                 
-                # Combina i risultati
+                # Combine results
                 text_embeds = np.vstack(text_embeds_list)
                 image_embeds = np.vstack(image_embeds_list)
                 
                 return text_embeds, image_embeds
                 
     except Exception as e:
-        print(f"[ERROR] Errore generale nell'embedding batch: {e}")
+        print(f"[ERROR] General error in batch embedding: {e}")
         return None, None
 
 # ========== MAIN LOOP ==========
 
 while True:
     print("TRANSFORMERS_CACHE set to:", os.environ.get("TRANSFORMERS_CACHE"))
-    print(f"\n[INFO] Avvio ciclo estrazione embedding - {datetime.now().isoformat()}")
-    print(f"[INFO] Configurazione: LIMIT_RECORDS={LIMIT_RECORDS}, BATCH_SIZE={BATCH_SIZE}, DEVICE={device}")
+    print(f"\n[INFO] Starting embedding extraction cycle - {datetime.now().isoformat()}")
+    print(f"[INFO] Configuration: LIMIT_RECORDS={LIMIT_RECORDS}, BATCH_SIZE={BATCH_SIZE}, DEVICE={device}")
     
     last_guid = read_last_processed_guid()
     df_new = get_new_records(last_guid)
 
     if df_new.count() == 0:
-        print("[INFO] Nessun nuovo record trovato. Attendo il prossimo ciclo...\n")
+        print("[INFO] No new records found. Waiting for next cycle...\n")
         time.sleep(SLEEP_SECONDS)
         continue
 
     columns = ["guid", "image_url", "title", "description", "type", "subject", "creator"]
     pandas_df = df_new.select(*columns).toPandas()
-    print(f"[INFO] Record da processare: {len(pandas_df)}")
+    print(f"[INFO] Records to be processed: {len(pandas_df)}")
 
     records = []
-    # Buffer per accumulo batch
+    # Buffer for batch accumulation
     batch_texts = []
     batch_images = []
     batch_guids = []
     batch_rows = []
     
-    # Mantieni loop for row in pandas_df.iterrows() come richiesto
+    
     for idx, row in pandas_df.iterrows():
         guid = row["guid"]
         print(f"[BATCH] Processando record {idx+1}/{len(pandas_df)}: {guid}")
         
-        # 1. Prepara il testo concatenato nel giusto ordine
+        
         text = preprocess_text(row)
         
-        # 2. Tokenizza e tronca a 77 token (taglio automatico)
+        # Tokenize and truncate to 77 tokens (automatic cutting)
         tokens = clip_processor.tokenizer(
             text,
             truncation=True,
             max_length=77,
             return_tensors="pt"
         )
-        # Ricostruisci il testo troncato (opzionale, per log/debug)
+        # Reconstruct truncated text (optional, for log/debug)
         text_input = clip_processor.tokenizer.decode(
             tokens["input_ids"][0], skip_special_tokens=True
         )
 
-        # 3. Ora text_input è sicuro da passare al modello (mai più di 77 token)
+        # Now text_input is safe to pass to the model (never more than 77 tokens)
         image_url = row["image_url"]
         if isinstance(image_url, list):
             image_url = image_url[0] if len(image_url) > 0 else None
         elif isinstance(image_url, str) and image_url.startswith("[") and image_url.endswith("]"):
-            # Se è una stringa che rappresenta una lista, la converto
+            # if it is a string representing a list, converts it
             try:
                 image_url_list = ast.literal_eval(image_url)
                 if isinstance(image_url_list, list) and len(image_url_list) > 0:
@@ -325,16 +324,16 @@ while True:
         
         image = fetch_image(image_url) if image_url else None
 
-        # Accumula i record in batch da BATCH_SIZE per l'embedding
-        if image:  # Solo se abbiamo un'immagine valida
+        # Accumulates batch records from BATCH_SIZE for embedding
+        if image:  # Only if we have a valid image
             batch_texts.append(text_input)
             batch_images.append(image)
             batch_guids.append(guid)
             batch_rows.append(row)
-            print(f"[BATCH] Aggiunto al batch: {len(batch_texts)}/{BATCH_SIZE}")
+            print(f"[BATCH] Added to batch: {len(batch_texts)}/{BATCH_SIZE}")
         else:
-            # Processa immediatamente se non c'è immagine
-            print(f"[BATCH] Nessuna immagine per {guid}, processamento immediato")
+            # Process immediately if there is no image
+            print(f"[BATCH] No image {guid}, immediate processing")
             embedding_status = "NO_IMAGE"
             emb_text = clip_model.get_text_features(**clip_processor(
                 text=text_input, return_tensors="pt", padding=True)
@@ -348,11 +347,11 @@ while True:
                 "embedding_status": embedding_status,
             })
 
-        # Processa batch quando raggiunge BATCH_SIZE
+        # Process batch when it reaches BATCH_SIZE
         if len(batch_texts) >= BATCH_SIZE:
-            print(f"[BATCH] Processando batch di {len(batch_texts)} elementi...")
+            print(f"[BATCH] Processing batches of {len(batch_texts)} elements...")
             
-            # Manda tutto in un colpo a CLIP
+            # Send everything in one go to CLIP
             emb_texts, emb_images = get_embeddings_batch(batch_texts, batch_images)
             
             if emb_texts is not None and emb_images is not None:
@@ -364,10 +363,10 @@ while True:
                         "embedding_image": emb_images[i].tolist(),
                         "embedding_status": "OK",
                     })
-                    print(f"[BATCH] Salvato embedding per {batch_guid}")
+                    print(f"[BATCH] Saved embedding for {batch_guid}")
             else:
-                # Fallback in caso di errore totale del batch
-                print(f"[BATCH] Errore nel batch, impostando status FAILED per tutti gli elementi")
+                # Fallback in case of total batch error
+                print(f"[BATCH] Error in batch, setting status FAILED for all items")
                 for batch_guid in batch_guids:
                     records.append({
                         "guid": batch_guid,
@@ -376,22 +375,22 @@ while True:
                         "embedding_status": "FAILED",
                     })
             
-            # Resetta i buffer
+            # Resets the batch buffer
             batch_texts = []
             batch_images = []
             batch_guids = []
             batch_rows = []
-            print(f"[BATCH] Buffer resettato")
+            print(f"[BATCH] Buffer reset")
 
-    # In coda: batch rimanente - elabora gli eventuali ultimi n < BATCH_SIZE elementi rimasti nel buffer
+    # Queued: batch remaining - process any last n < BATCH_SIZE elements left in the buffer
     if len(batch_texts) > 0:
-        print(f"[BATCH] Processando batch rimanente di {len(batch_texts)} elementi...")
+        print(f"[BATCH] Processing remaining batch of {len(batch_texts)} elements...")
         
-        # Manda tutto in un colpo a CLIP
+        # Send everything in one go to CLIP
         emb_texts, emb_images = get_embeddings_batch(batch_texts, batch_images)
         
         if emb_texts is not None and emb_images is not None:
-            # Salva embedding_text, embedding_image in records[]
+            # Saves embedding_text, embedding_image in records[]
             for i, batch_guid in enumerate(batch_guids):
                 records.append({
                     "guid": batch_guid,
@@ -399,10 +398,10 @@ while True:
                     "embedding_image": emb_images[i].tolist(),
                     "embedding_status": "OK",
                 })
-                print(f"[BATCH] Salvato embedding finale per {batch_guid}")
+                print(f"[BATCH] Saved final embedding for {batch_guid}")
         else:
-            # Fallback in caso di errore totale del batch
-            print(f"[BATCH] Errore nel batch finale, impostando status FAILED per tutti gli elementi")
+            # Fallback in case of total batch error
+            print(f"[BATCH] Error in final batch, setting status FAILED for all items")
             for batch_guid in batch_guids:
                 records.append({
                     "guid": batch_guid,
@@ -421,7 +420,7 @@ while True:
             if rec["embedding_status"] == "OK":
                 point_id = sanitize_id(rec["guid"])
 
-                # Payload ridotto, senza embedding_text
+                # Prepare payload for Qdrant, without embedding
                 payload = {
                     "guid": rec["guid"],
                     "status": "pending"
@@ -434,7 +433,7 @@ while True:
                     id=point_id,
                     vector={
                         "image": embedding_image,
-                        "combined": embedding_image + embedding_text  # concatenazione
+                        "combined": embedding_image + embedding_text  # Concatenates image and text embeddings
                     },
                     payload=payload  
                 ))
@@ -443,16 +442,16 @@ while True:
 
         try:
             qdrant.upsert(collection_name=COLLECTION_NAME, points=points)
-            print(f"[QDRANT] Completato upsert di {len(points)} embeddings")
+            print(f"[QDRANT] Completated upsert of {len(points)} embeddings")
 
             last_guid_processed = pandas_df["guid"].iloc[-1]
             write_last_processed_guid(last_guid_processed)
-            print(f"[STATE] Ultimo GUID processato: {last_guid_processed}")
+            print(f"[STATE] Last GUID processed: {last_guid_processed}")
 
         except Exception as e:
-            print(f"[QDRANT] Errore durante upsert in Qdrant: {e}")
+            print(f"[QDRANT] Error during upsert in Qdrant: {e}")
 
 
-        print("[INFO] Embedding extraction batch completato. Attendo...")
-        print(f"[INFO] Prossimo ciclo tra {SLEEP_SECONDS} secondi...")
+        print("[INFO] Embedding extraction batch completated. Waiting...")
+        print(f"[INFO] Next cycle in {SLEEP_SECONDS} seconds...")
         time.sleep(SLEEP_SECONDS)
