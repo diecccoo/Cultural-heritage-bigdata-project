@@ -194,17 +194,66 @@ For Europeana metadata, the job reads the JSON files, filters out malformed or i
 For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance (you can find both scripts in the `eu-to-cleansed/` folder, and you can decide the one to run in the file `scheduler.py` in the same folder). In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
 
 ### 5.4 Machine learning model
-- CLIP embedding (image + text)
-- Salvataggio su Qdrant
-- Deduplicazione semantica
-- qdrant video
-- whatsapp
+This layer is responsible for enriching cleaned cultural heritage metadata with semantic embeddings, enabling both deduplication and recommendation functionalities.
 
-### 5.5 Join to Curated Layer
-- Join tra oggetti Europeana e annotazioni
-- Uso di canonical_id
-- Output finale (Delta + PostgreSQL)
-- SILVIA FARE JOIN
+We use **CLIP ViT-B/32**, a multimodal model from Hugging Face, to extract:
+- A 512-dimensional image embedding
+- A 512-dimensional text embedding built from selected fields considered most informative
+
+#### Embedding Usage:
+- The image-only vector is then used to detect semantic duplicates, using a similarity threshold
+- The image vector and text vector are concatenated into a 1024-dimensional combined vector, used for recommendation purposes in the final dashboard, powering the "Find similar objects" feature.
+
+Embeddings are stored in **Qdrant**, an open-source vector database designed for high-performance similarity search. 
+We chose Qdrant because:
+- It supports cosine similarity, which aligns with CLIP’s embedding geometry
+- It offers fast and scalable search, including approximate or exact modes
+- It includes built-in evaluation tools like `precision@k` to assess retrieval quality
+- It supports custom payloads and semantic filtering (e.g., by `status`, `guid`, `canonical_id`)
+
+#### Visualizing semantic similarity
+To llustrate how Qdrant  organizes and retrieves embeddings, we recorded a short screen recording of the vector dashboard in action. The video shows:
+- A graph view of the `heritage_embeddings` collection, where each node represents a vector and edges indicate semantic similarity score.
+- Interactive exploration: clicking on a purple node shows its associated metadata (`guid`, `canonical_id`, `status`, etc. that can be seen on the right) in the payload panel. Green nodes represent similar items retrieved in real-time.
+- Similarity search expansion: dragging the graph reveals clusters of related items, visualizing how Qdrant builds neighborhoods based on embedding distance.
+
+![Qdrant Demo Video](readme_images/qdrant.gif)
+
+### 5.5 Curated layer
+This module continuously performs a **join** between Europeana metadata and user annotations, using only validated (non-duplicate) objects. 
+The result is a clean, enriched view for each cultural heritage item, ready for analysis, export, and recommendation.
+
+It merges three sources:
+- **Europeana metadata** from `cleansed/europeana/`
+- **User annotations** from `cleansed/user_generated/`
+- **Deduplication check** from Qdrant (via `canonical_id`)
+
+The common key used for the join is `guid`.
+
+#### The process involves:
+
+1. **Full outer join** between Europeana metadata and user annotations on `guid`.  
+   This ensures that:
+   - Europeana records without annotations are retained
+   - Annotated items are enriched with metadata
+   - The underlying assumption is that UGC' guids always come from europeana 
+
+2. **Filtering by Qdrant deduplication**:  
+   Only records whose `guid` appears in Qdrant as a canonical object (or as a 'duplicate mapped to a canonical_id') are preserved.
+   Thanks to `canonical_id`, annotations originally attached to duplicate objects are correctly reassigned to the canonical version — so no user input is lost.
+
+3. **Delta Table writing with merge logic**:  
+   - The table is updated incrementally using `MERGE`:
+     - If a match is found on `(guid, timestamp, user_id)`, the record is updated
+     - If not, the annotation is inserted
+   - This avoids duplicates and ensures idempotency.
+
+   Previously, we used an `overwrite` strategy, but it proved computationally expensive.  
+   The old implementation (`join_eu_ugc_qdrant_overwrite.py`) is still available and can be re-enabled by modifying the Dockerfile.
+
+
+#### Output
+The result is a **Delta Table**, where each row represents one user annotation joined with the corresponding Europeana metadata, stored at: `s3a://heritage/curated/join_metadata_deduplicated/`
 
 ### 5.6 Serving layer
 
