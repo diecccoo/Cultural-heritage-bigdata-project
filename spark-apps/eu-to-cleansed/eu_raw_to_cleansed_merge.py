@@ -8,9 +8,9 @@
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, lit, countDistinct 
-from delta.tables import DeltaTable # Importazione necessaria per MERGE
+from delta.tables import DeltaTable # for merging
 
-# ---------------- SparkSession configurata per MinIO + Delta ----------------
+# ---------------- SparkSession configurated for MinIO + Delta ----------------
 spark = SparkSession.builder \
     .appName("CleansUGC Raw JSON to Cleansed Delta") \
     .config("spark.jars.packages", "io.delta:delta-core_2.12:2.4.0,org.apache.hadoop:hadoop-aws:3.3.4") \
@@ -26,23 +26,23 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("WARN")
 
-# --- Percorsi per sorgente e destinazione ---
+# --- paths ---
 RAW_PATH = "s3a://heritage/raw/metadata/europeana_metadata/"
 CLEANSED_PATH = "s3a://heritage/cleansed/europeana/"
 
-# ---------------- Lettura dei JSON grezzi Europeana ----------------
+# ---------------- reading raw JSON Europeana ----------------
 print(f"Reading JSON from {RAW_PATH}...")
 df_source = spark.read.json(RAW_PATH)
 print(f"Record read: {df_source.count()}")
 
 # ---------------- Data cleansing ----------------
-# Questo DataFrame rappresenta i dati sorgente da "fondere" nella tabella di destinazione
+
 df_source_clean = df_source \
     .filter(col("guid").isNotNull()) \
     .filter(col("image_url").isNotNull()) \
     .dropDuplicates(["guid"])
 
-# Trasforma le stringhe vuote "" in null.
+# Trasforms stringhe "" in null.
 fields_to_clean = [
     "title", "description", "timestamp_created", "provider", "creator", "subject", "language", "type",
     "format", "rights", "dataProvider", "isShownAt", "edm_rights"
@@ -55,12 +55,12 @@ for field in fields_to_clean:
 
 print(f"Record after cleaning: {df_source_clean.count()}")
 
-# ---------------- Scrittura in formato Delta con logica MERGE ----------------
+# ---------------- writing in formato Delta with MERGE ----------------
 print(f"Start MERGE operation on Delta table in {CLEANSED_PATH}...")
 
-# Verifica se la tabella Delta di destinazione esiste già
+
 if DeltaTable.isDeltaTable(spark, CLEANSED_PATH):
-    # La tabella esiste, esegui il MERGE
+    
     delta_table = DeltaTable.forPath(spark, CLEANSED_PATH)
 
     delta_table.alias("target").merge(
@@ -78,7 +78,7 @@ else:
 
 print("Job Completed.")
 
-# --- INIZIO BLOCCO DI VERIFICA E DEBUG ---
+# ---  DEBUG ---
 try:
     print("DEBUG: entered in the try section")
     
@@ -98,7 +98,7 @@ try:
 
 except Exception as e:
     print(f"ERROR IN THE DEBUG PART: {e}")
-    # Stampa lo stack trace completo per debugging approfondito
+    # print stack trace complete for debugging 
     import traceback
     traceback.print_exc()
 

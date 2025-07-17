@@ -193,7 +193,7 @@ For Europeana metadata, the job reads the JSON files, filters out malformed or i
 
 For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance (you can find both scripts in the `eu-to-cleansed/` folder, and you can decide the one to run in the file `scheduler.py` in the same folder). In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
 
-### 5.4 Machine Learning Model
+### 5.4 Machine learning model
 This layer is responsible for enriching cleaned cultural heritage metadata with semantic embeddings, enabling both deduplication and recommendation functionalities.
 
 We use **CLIP ViT-B/32**, a multimodal model from Hugging Face, to extract:
@@ -219,7 +219,7 @@ To llustrate how Qdrant  organizes and retrieves embeddings, we recorded a short
 
 ![Qdrant Demo Video](readme_images/qdrant.gif)
 
-### 5.5 Curated Layer
+### 5.5 Curated layer
 This module continuously performs a **join** between Europeana metadata and user annotations, using only validated (non-duplicate) objects. 
 The result is a clean, enriched view for each cultural heritage item, ready for analysis, export, and recommendation.
 

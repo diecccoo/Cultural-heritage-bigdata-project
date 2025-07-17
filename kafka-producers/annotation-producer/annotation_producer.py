@@ -157,4 +157,4 @@ while True:
     }
     producer.send(KAFKA_TOPIC, annotation)
     print("Published:", annotation)
-    time.sleep(0.4)  # Wait x seconds between publications
+    time.sleep(0.5)  # Wait x seconds between publications

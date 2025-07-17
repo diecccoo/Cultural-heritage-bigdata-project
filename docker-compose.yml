@@ -309,15 +309,6 @@ services:
       timeout: 10s
       retries: 3
 
-#da cancellare query
-  query:
-    container_name: query
-    build:
-      context: .
-      dockerfile: ./query/Dockerfile
-    networks:
-      - heritage-net
-
 networks:
   heritage-net:
     driver: bridge
@@ -327,7 +318,6 @@ volumes:
   minio-data:
   zookeeper-data:
   kafka-data:
-  spark-eutm:
   postgres-data:
   pgadmin-data:
   hf-cache:

@@ -1,4 +1,3 @@
-# works
 # overwrite
 # file that converts Europeana metadata to Delta format on MinIO.
 # This script:

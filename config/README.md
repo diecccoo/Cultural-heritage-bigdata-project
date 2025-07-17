@@ -113,10 +113,10 @@ Custom Dockerfile used to build the container that runs `init_minio.py`. This en
 SQL script automatically executed when the PostgreSQL container starts for the first time. 
 The `heritage` database includes two key tables used for storing curated data after the join between Europeana metadata and user-generated annotations deduplicated:
 
-#### 📌 `join_metadata_deduplicated`
+#### `join_metadata_deduplicated`
 This is the **main serving table** containing cleaned, deduplicated, and joined data. Each row represents a single user annotation and the associated cultural metadata.
 
-#### 📥 `join_metadata_staging`
+#### `join_metadata_staging`
 A **temporary staging table**, used during batch insertions and merge operations before data is validated and moved to the main table.
 
 Both tables share the same schema:
@@ -143,7 +143,51 @@ Both tables share the same schema:
 | `type`        | TEXT      | Type/category (e.g., image, text, video)                |
 
 
+### Accessing PostgreSQL via pgAdmin 
+
+### Prerequisites 
+- Docker and Docker Compose installed and running
+- Services `postgres` and `pgadmin` must be active (`docker compose up -d`)
+
+---
+
+### 1.  Open pgAdmin in your browser 
+Go to: [http://localhost:5050](http://localhost:5050)
+
+Login credentials (defined in `docker-compose.yml`):
+- **Email**: `admin@heritage.com`
+- **Password**: `admin`
+
+---
+
+### 2.  Add the PostgreSQL server 
+- Click on `Add New Server`  
+
+
+**Tab: General**
+- **Name**: `heritage` 
+
+**Tab: Connection**
+- **Host name/address**: `postgres`  
+- **Port**: `5432`  
+- **Maintenance database**: `heritage`  
+- **Username**: `postgres`  
+- **Password**: `postgres`  
+
+Click `Save` to connect.
+
+---
+
+### 3.  Browse the database tables 
+- Expand the server (`heritage`)
+- Navigate to: `Databases → heritage → Schemas → public → Tables`
+- Right-click on a table and select `View/Edit Data → All Rows` to see its content
+
+If the server doesn't appear, right-click on `Servers` and choose `Refresh`.
+
+
 **Integration with Streamlit**
+
 The Streamlit dashboard connects to this table (join_metadata_deduplicated) in the heritage database to power all visualizations, filters (currently by creator, provider, tags), and search features.
 
 ---
@@ -161,7 +205,7 @@ config/
 │   └── Dockerfile                   # Container used to run MinIO initialization
 │
 ├── postgres/
-│   └── init.sql                     # Initializes join_metadata_deduplicated table in PostgreSQL
+│   └── init.sql                     # Initializes tables in PostgreSQL
 │
 └── README.md
 ---

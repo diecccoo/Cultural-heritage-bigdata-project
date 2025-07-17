@@ -34,7 +34,7 @@ def run_script_with_retries():
 while True:
     success = run_script_with_retries()
     if success:
-        logging.info(" Sleeping for {WAIT_AFTER_SUCCESS} minutes before next execution...")
+        logging.info(f"Sleeping for {WAIT_AFTER_SUCCESS} seconds before next execution...")
         time.sleep(WAIT_AFTER_SUCCESS)
     else:
         logging.info(" Will retry from scratch in next cycle.")
