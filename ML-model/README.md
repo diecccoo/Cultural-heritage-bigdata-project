@@ -72,7 +72,7 @@ The script:
 
 ### Output format 
 
-```json
+```jsonc
 {
   "payload": {
     "guid": "2021401/https___data.europeana.eu_item_12345",
@@ -130,7 +130,7 @@ If the Qdrant `search()` API fails or returns no candidates:
 
 
 ### Final output (Qdrant Point Payload)
-```json
+```jsonc
 {
   "payload": {
     "guid": "2021401/https___data.europeana.eu_item_12345",
