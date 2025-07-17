@@ -4,7 +4,7 @@ import os
 INTERVAL_MINUTES = 1  
 
 while True:
-    print("[Scheduler] Avvio job Spark di cleansing metadati Europeana...")
+    print("[Scheduler] Starting Spark job for cleansing Europeana metadata...")
 
     exit_code = os.system(
         "spark-submit "
@@ -16,8 +16,8 @@ while True:
     )
 
     if exit_code == 0:
-        print(f"[Scheduler] Job completato. Attendo {INTERVAL_MINUTES} minuti...\n")
+        print(f"[Scheduler] Job completed successfully. Waiting for {INTERVAL_MINUTES} minutes...\n")
     else:
-        print("[Scheduler] ERRORE durante il job Spark. Riprovo tra poco...\n")
+        print("[Scheduler] ERROR occurred during Spark job. Retrying shortly...\n")
 
     time.sleep(INTERVAL_MINUTES * 60)

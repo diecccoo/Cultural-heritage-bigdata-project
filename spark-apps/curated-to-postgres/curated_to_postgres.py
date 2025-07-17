@@ -17,18 +17,18 @@ hadoopConf.set("fs.s3a.secret.key", "minio123")
 hadoopConf.set("fs.s3a.path.style.access", "true")
 hadoopConf.set("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
 
-log("Configurazione MinIO completata")
+log("Configuration MinIO completed")
 
 try:
     # Legge la Delta Table joinata
     df = spark.read.format("delta").load("s3a://heritage/curated/join_metadata_deduplicated/")
-    log("Delta join_metadata_deduplicated caricata correttamente")
+    log("Delta join_metadata_deduplicated uploaded successfully")
 
     df = df.withColumn("image_url", from_json("image_url", ArrayType(StringType())))
     df = df.withColumn("subject", from_json("subject", ArrayType(StringType())))
 
 
-    # Seleziona TUTTI i 23 campi richiesti
+    # select ALL 23 required fields
     df_mapped = df.select(
         col("guid"),
         col("user_id"),
@@ -63,7 +63,7 @@ try:
 
 
 
-    # ====== Scrivi su tabella STAGING ======
+    # ====== Write to STAGING table ======
     df_mapped.write \
         .format("jdbc") \
         .option("url", "jdbc:postgresql://postgres:5432/heritage") \
