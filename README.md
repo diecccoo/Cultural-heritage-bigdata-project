@@ -20,7 +20,7 @@ The Streamlit dashboard lets users explore cultural content through search, filt
 
 ### 2.2 Data flow diagram
 
-![Data Flow](data/data_flow_architecture.png)
+![Data Flow](data/flow_diagram.png)
 
 ### 2.3 File structure
 
