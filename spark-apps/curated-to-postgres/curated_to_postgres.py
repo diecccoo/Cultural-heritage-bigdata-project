@@ -50,15 +50,15 @@ try:
 
 
 
-    log("Schema completo pronto per PostgreSQL")
+    log("Complete schema ready for PostgreSQL")
     df_mapped.printSchema()
-    log("🔍 Esempio righe (primi 5):")
+    log(" Example rows (first 5):")
     df_mapped.show(5, truncate=False)
 
-    log("🔢 Conteggio righe totali:")
-    log(f"Totale righe da scrivere in PostgreSQL: {df_mapped.count()}")
+    log("Total row count:")
+    log(f"Total rows to write in PostgreSQL: {df_mapped.count()}")
     
-    log("📋 Tipi Spark reali:")
+    log("Real Spark Types:")
     print(df_mapped.dtypes)
 
 
@@ -74,14 +74,14 @@ try:
         .mode("overwrite") \
         .save()
 
-    log("✅ Scrittura completata in join_metadata_staging")
+    log("Writing completed in join_metadata_staging")
 
 except Exception as e:
-    log(f"❌ Errore durante il processo: {str(e)}")
+    log(f"Error during the process: {str(e)}")
     sys.exit(1)
 
 try:
-    log("🔄 Eseguo refresh da STAGING a tabella finale...")
+    log("performing refresh from STAGING to final table...")
 
     conn = psycopg2.connect(
         host="postgres",
@@ -89,15 +89,15 @@ try:
         user="postgres",
         password="postgres"
     )
-    conn.autocommit = False  # 🚨 Avvia la transazione
+    conn.autocommit = False  #  Initiate the transaction
     cur = conn.cursor()
-    log("🚧 Transazione avviata")
+    log("Transaction initiated")
 
-    # 1. Elimina i dati dalla tabella finale
+    # 1. Delete data from the final table
     cur.execute("DELETE FROM join_metadata_deduplicated;")
-    log("🗑️ DELETE completato")
+    log("DELETE completed")
 
-    # 2. Inserisci i dati dalla staging
+    # 2. Insert the data from staging
     cur.execute("""
         INSERT INTO join_metadata_deduplicated (
             guid, user_id, tags, comment, timestamp,
@@ -112,21 +112,21 @@ try:
             title, type
         FROM join_metadata_staging;
     """)
-    log("✅ INSERT completato")
+    log("INSERT completed")
 
-    # 3. Commit finale
+    # 3. Final commit 
     conn.commit()
-    log("💾 COMMIT finale completato")
+    log("Final Commit Completed")
 
 except Exception as e:
-    log(f"❌ Errore durante il refresh: {e}")
+    log(f"Error during refresh: {e}")
     if 'conn' in locals():
         conn.rollback()
-        log("↩️ ROLLBACK eseguito (transazione annullata)")
+        log("ROLLBACK executed (transaction cancelled)")
 
 finally:
     if 'cur' in locals():
         cur.close()
     if 'conn' in locals():
         conn.close()
-    log("🔒 Connessione PostgreSQL chiusa")
+    log("Connection PostgreSQL closed")
