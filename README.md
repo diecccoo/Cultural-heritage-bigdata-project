@@ -287,7 +287,7 @@ Testing our pipeline, we can see this results:
 ![Dashboard page2](readme_images/dashboard_view2.jpeg)
 
 Here, we have a comparison of our recommendations, based on text and image similarity using CLIP, and Europeana's reccomendations:
-![Recommendation example](readme_images/recommendations.jpegjpeg)
+![Recommendation example](readme_images/recommendations.jpeg)
 
 ---
 
