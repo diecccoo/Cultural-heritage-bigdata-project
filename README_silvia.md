@@ -164,7 +164,7 @@ It merges three sources:
 The common key used for the join is `guid`.
 
 
-####The process involves:
+#### The process involves:
 
 1. **Full outer join** between Europeana metadata and user annotations on `guid`.  
    This ensures that:
