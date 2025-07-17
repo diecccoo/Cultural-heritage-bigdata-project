@@ -1,13 +1,40 @@
 # Cultural Heritage Project
 
+Welcome to the documentation of our Cultural Heritage Big Data Project.  
+This document provides a comprehensive overview of the system architecture, technologies used, and implementation details of our pipeline for processing and exploring cultural heritage data.
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. System Architecture](#2-system-architecture)
+  - [2.1 Architecture Overview](#21-architecture-overview)
+  - [2.2 Data Flow Diagram](#22-data-flow-diagram)
+  - [2.3 Repository Structure](#23-repository-structure)
+- [3. Data Sources](#3-data-sources)
+  - [3.1 Europeana Metadata](#31-europeana-metadata)
+  - [3.2 User Annotations](#32-user-annotations)
+- [4. Technologies Used](#4-technologies-used)
+- [5. Pipeline Stages](#5-pipeline-stages)
+  - [5.1 Ingestion Layer](#51-ingestion-layer)
+  - [5.2 Raw Storage Layer](#52-raw-storage-layer)
+  - [5.3 Cleansing Layer](#53-cleansing-layer)
+  - [5.4 Machine Learning Model](#54-machine-learning-model)
+  - [5.5 Join to Curated Layer](#55-join-to-curated-layer)
+  - [5.6 Serving Layer](#56-serving-layer)
+- [6. How to Run](#6-how-to-run)
+  - [6.1 Services, Volumes, and Network](#61-services-volumes-and-network)
+- [7. Results](#7-results)
+  - [7.1 Dashboard Features](#71-dashboard-features)
+- [10. Limitations & Future Work](#10-limitations--future-work)
+- [11. References & Acknowledgments](#11-references--acknowledgments)
+- [12. Authors & Contact](#12-authors--contact)
+
 ## 1. Overview
 
 This project aims to design and prototype a big data system that supports the digitization, analysis, and exploration of large-scale cultural heritage collections. These include artifacts, manuscripts, images, and user-contributed metadata from museums, libraries, and historical archives.
 
 This project implements a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It includes simulated user interactions and metadata ingestion into Kafka, followed by structured processing with Apache Spark and storage in MinIO using a Delta Lake architecture.
 The pipeline supports semantic deduplication, metadata enrichment, and content-based recommendations. Deduplicated and enriched data is then exported from MinIO to PostgreSQL, which integrates with the serving layer to power structured queries and dashboard visualizations.
-
-The Streamlit dashboard lets users explore cultural content through search, filtering, and similarity-based navigation.
 
 ---
 
@@ -277,6 +304,10 @@ docker compose restart streamlit
 ---
 
 ## 7. Results
+
+Testing our pipeline, we've seen this performance by Docker:
+
+![Docker performance](readme_images/docker_performance.jpeg)
 
 ### 7.1 Dashboard features
 
