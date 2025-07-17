@@ -27,7 +27,7 @@ def get_validated_ids_from_qdrant():
     Query Qdrant for all points with status = 'validated'.
     Return a set of unique guid from the first point of each canonical_id group.
     """
-    print("[DEBUG] Connessione a Qdrant e recupero punti 'validated'...")
+    print("[DEBUG] Connection to Qdrant and recovery of validated points...")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=20)
 
     # Scroll all points with status = "validated"
@@ -54,15 +54,15 @@ def get_validated_ids_from_qdrant():
     points_data = [point.payload for point in results if point.payload]
     df = pd.DataFrame(points_data)
 
-    # Raggruppa per canonical_id e prendi il primo guid
+    # Group by canonical_id and take the first guid
     if 'canonical_id' not in df.columns or 'guid' not in df.columns:
-        print("[DEBUG WARN] Campi canonical_id o guid non trovati nei payload Qdrant.")
+        print("[DEBUG WARN] Canonical_id or guid fields not found in Qdrant payloads.")
         return set()
 
     grouped = df.groupby("canonical_id").first().reset_index()
     validated_ids = set(grouped["guid"].tolist())
-    print(f"[DEBUG] Totale guid deduplicati (un per canonical_id): {len(validated_ids)}")
-    # print("[DEBUG] Esempi di guid da Qdrant (primi 10):")
+    print(f"[DEBUG] Total deduplicated guid (one per canonical_id): {len(validated_ids)}")
+    # print("[DEBUG] Examples of guid from Qdrant (first 10):")
     # for id_ in list(validated_ids)[:10]:
     #     print(f" - {id_}")
     return validated_ids
@@ -70,15 +70,15 @@ def get_validated_ids_from_qdrant():
 
 def get_latest_processed_timestamp(spark):
     """
-    Recupera il timestamp massimo già processato dal layer curated.
+    Retrieves the maximum timestamp already processed by the curated layer.
     """
     try:
         df_curated = spark.read.format("delta").load(CURATED_PATH)
         max_ts = df_curated.select(spark_max("timestamp")).collect()[0][0]
-        print(f"[DEBUG] Timestamp massimo trovato nel layer curated: {max_ts}")
+        print(f"[DEBUG] Maximum timestamp found in the curated layer: {max_ts}")
         return max_ts
     except Exception as e:
-        print(f"[DEBUG] Nessun timestamp trovato: la tabella curated potrebbe non esistere ancora. Dettaglio errore: {str(e)}")
+        print(f"[DEBUG] No timestamp found: curated table may not exist yet. Error detail: {str(e)}")
         return None
 
 
@@ -105,14 +105,14 @@ last_qdrant_reload = 0
 europeana_df = None
 validated_ids = None
 
-print("[DEBUG] Job avviato: join con filtro Qdrant + Delta")
+print("[DEBUG] Job started: join with Qdrant filter + Delta")
 
 while True:
     now = time.time()
 
     # Reload Europeana if necessary
     if europeana_df is None or (now - last_europeana_reload > RELOAD_EUROPEANA_MIN * 60):
-        print("[DEBUG] Ricarico metadati Europeana da Delta...")
+        print("[DEBUG] Europeana metadata reload from Delta...")
         europeana_df = read_latest_delta_table(spark, EUROPEANA_PATH)
         last_europeana_reload = now
 
@@ -123,17 +123,17 @@ while True:
 
 
     
-    # Filtro Europeana su validated_ids da Qdrant
+    # Filter Europeana on validated_ids from Qdrant
     filtered_europeana_df = europeana_df.filter(col("guid").isin(list(validated_ids)))
-    # print("[DEBUG] Esempio metadati Europeana filtrati (guid, title se presente):")
+    # print("[DEBUG] Example filtered Europeana metadata (guid, title se presente):")
     # if "title" in filtered_europeana_df.columns:
     #     filtered_europeana_df.select("guid", "title").show(5, truncate=False)
     # else:
     #     filtered_europeana_df.select("guid").show(5, truncate=False)
 
-    # print(f"[DEBUG] Lista guid filtrati da Qdrant: {validated_ids}")
-    print(f"[DEBUG] Europeana totali prima del filtro: {europeana_df.count()}")
-    print(f"[DEBUG] Europeana filtrati dopo Qdrant: {filtered_europeana_df.count()}")
+    # print(f"[DEBUG] List guid filtered from Qdrant: {validated_ids}")
+    print(f"[DEBUG] Europeana total before filter: {europeana_df.count()}")
+    print(f"[DEBUG] Europeana filtered after Qdrant: {filtered_europeana_df.count()}")
 
 
 
