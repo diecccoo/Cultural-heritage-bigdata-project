@@ -5,21 +5,25 @@
 
 This project aims to design and prototype a big data system that supports the digitization, analysis, and exploration of large-scale cultural heritage collections. These include artifacts, manuscripts, images, and user-contributed metadata from museums, libraries, and historical archives.
 
-This project sets up a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It simulates users interaction , ingestion to Kafka, and processing with Spark to MinIO, utilized as a data lake with Delta Lake Architecture. 
-This system performs analytics, deduplication and recommendations, and it also enables easy exploration and retrieval of cultural content.
+This project implements a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It includes simulated user interactions and metadata ingestion into Kafka, followed by structured processing with Apache Spark and storage in MinIO using a Delta Lake architecture.
+The pipeline supports semantic deduplication, metadata enrichment, and content-based recommendations. Deduplicated and enriched data is then exported from MinIO to PostgreSQL, which integrates with the serving layer to power structured queries and dashboard visualizations.
+
+The Streamlit dashboard lets users explore cultural content through search, filtering, and similarity-based navigation.
+
 ---
 
-## 2. System Architecture
+## 2. System architecture
 
-### 2.1 Layered Architecture Overview
-> Diagramma logico dei sei layer (Ingestion → Serving) con una breve descrizione per ciascuno.
+### 2.1 Architecture overview
 
-### 2.2 Data Flow Diagram
-> Rappresentazione visiva del flusso end-to-end dei dati.
+![Architecture](data/system_architecture.jpeg)
+
+### 2.2 Data flow diagram
+
+![Data Flow](data/data_flow_architecture.png)
 
 ### 2.3 File structure
 
-lll
 ---
 
 ## 3. Data Sources
@@ -29,12 +33,12 @@ lll
 
 ### 3.2 User Annotations (Synthetic)
 > Come vengono generate, struttura dei messaggi, scopo.
-iujn
+
 ---
 
 ## 4. Technologies Used
 > Tabella o elenco con: tecnologia – ruolo – motivazione.
-iojioj
+
 ---
 
 ## 5. Pipeline Stages
@@ -67,11 +71,11 @@ iojioj
 - PostgreSQL per dashboard e query
 - Qdrant per recommendation
 - Streamlit UI
-min
+
 ---
 
 ## 6. How to Run
-
+PREREQUISITI RAM CPU
 ### 6.1 Docker Compose Setup
 > Spiegazione dei servizi, volumi, reti.
 
@@ -80,7 +84,7 @@ min
 
 ### 6.3 Build & Run Commands
 > Comandi principali per avviare il sistema.
-yhbh
+
 ---
 
 ## 7. Example Usage
@@ -91,27 +95,39 @@ yhbh
 ### 7.2 Query Examples
 > Query su PostgreSQL (es. filtra per autore)  
 > Query su Qdrant (es. simili per embedding)
-btgb
+
 ---
 
 ## 8. Results & Evaluation
 > Dati sulla deduplicazione, numero oggetti ingestiti, performance.
-iuhy
+
 ---
 ## 9. Lessons Learned
 > Cosa ha funzionato, cosa no, insight tecnici.
-hjù
+
 ---
 ## 10. Limitations & Future Work
 > Cosa manca, cosa può essere migliorato, estensioni possibili.
-fghjk
+
 ---
 ## 11. References & Acknowledgments
-> Fonti tecniche, API, paper, ringraziamenti.
-gfhj
----
+
+- [PostgreSQL vs Redis](https://risingwave.com/blog/postgresql-vs-redis-performance-and-use-case-comparison/)
+
+- [Spark vs Flink](https://www.datacamp.com/blog/flink-vs-spark)
+
+- [Delta Lake documentation](https://delta.io/)
+
+- [Delta Lake Architecture explenation](https://medium.com/codex/delta-lake-architecture-simplifying-data-engineering-analytics-needs-8d8be8459678)
+
+- [Europeana API Key](https://pro.europeana.eu/page/get-api)
+
 
 ## 12. Authors & Contact
-> Nomi, email, corso, anno, docente.
-fghj
+This project was developed by Group number 8 represented by:
+
+1. Silvia Bortoluzzi - [@silviabortoluzzi](https://github.com/silviabortoluzzi)
+2. Diego Conti - [@diecccoo](https://github.com/diecccoo)
+3. Sara Lammouchi - [@saralammouchi](https://github.com/saralammouchi)
+
 ---
