@@ -23,6 +23,7 @@ The Streamlit dashboard lets users explore cultural content through search, filt
 
 ### 2.3 Repository structure
 
+```text
 Cultural-heritage-bigdata-project/
 │
 ├── config/                      # Configuration files and setup scripts for services
@@ -57,6 +58,7 @@ Cultural-heritage-bigdata-project/
 ├── .gitignore
 ├── docker-compose.yml
 └── README.md
+```
 
 ---
 
