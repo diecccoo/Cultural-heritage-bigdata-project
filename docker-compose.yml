@@ -240,46 +240,6 @@ services:
     networks:
       - heritage-net
 
-  # embeddings-exporter:
-  #   build:
-  #     context: .
-  #     dockerfile: ./spark-apps/embeddings-exporter/Dockerfile
-  #   container_name: embeddings-exporter
-  #   depends_on:
-  #     - spark-master
-  #     - minio
-  #   networks:
-  #     - heritage-net
-  #   volumes:
-  #     - deduplication-data:/shared-data
-
-  # faiss:
-  #   build:
-  #     context: .
-  #     dockerfile: ./faiss/Dockerfile
-  #   container_name: faiss
-  #   depends_on:
-  #     - embeddings-exporter
-  #   networks:
-  #     - heritage-net
-  #   volumes:
-  # #     - deduplication-data:/shared-data
-
-
-  # deduplicator-to-cleansed:
-  #   build:
-  #     context: .
-  #     dockerfile: ./spark-apps/deduplicator-to-cleansed/Dockerfile
-  #   container_name: deduplicator-to-cleansed
-  #   depends_on:
-  #     - spark-master
-  #     - minio
-  #   networks:
-  #     - heritage-net
-  #   volumes:
-  #     - deduplication-data:/shared-data
-
-
   postgres:
     image: postgres:15
     container_name: postgres
@@ -348,9 +308,20 @@ services:
       timeout: 10s
       retries: 3
 
+#da cancellare query
+  query:
+    container_name: query
+    build:
+      context: .
+      dockerfile: ./query/Dockerfile
+    networks:
+      - heritage-net
+
 networks:
   heritage-net:
     driver: bridge
+
+
 
 
 volumes:

@@ -1,7 +1,7 @@
 import time
 import os
 
-INTERVAL_MINUTES = 1  # Cambia qui per modificare la frequenza
+INTERVAL_MINUTES = 1  
 
 while True:
     print("[Scheduler] Avvio job Spark di cleansing metadati Europeana...")
@@ -16,8 +16,8 @@ while True:
     )
 
     if exit_code == 0:
-        print(f"[Scheduler] ✅ Job completato. Attendo {INTERVAL_MINUTES} minuti...\n")
+        print(f"[Scheduler] Job completato. Attendo {INTERVAL_MINUTES} minuti...\n")
     else:
-        print("[Scheduler] ❌ ERRORE durante il job Spark. Riprovo tra poco...\n")
+        print("[Scheduler] ERRORE durante il job Spark. Riprovo tra poco...\n")
 
     time.sleep(INTERVAL_MINUTES * 60)
