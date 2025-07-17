@@ -53,7 +53,7 @@ Designed to be scheduled periodically via `scheduler.py`, present in the same su
 
 ---
 
-### `eu-to-cleansed/metadata_to_delta_table.py`
+### `eu-to-cleansed
 
 Batch job that:
 - Loads raw Europeana JSONs from `s3a://heritage/raw/metadata/europeana_metadata/`
@@ -63,18 +63,53 @@ Batch job that:
 
 Designed to be scheduled periodically via `scheduler.py`, present in the same subfolder.
 
+This folder includes **two versions** of the script used to write to the cleansed Delta table:
+>
+> - `eu_raw_to_cleansed_merge.py` – currently in use.  
+>   Uses a `MERGE` strategy to update the table incrementally, inserting only new records based on the `guid`.  
+> - `eu_raw_to_cleansed_overwrite.py` – older version (still available).  
+>   Overwrites the entire Delta table at each run, which is more computationally expensive and less efficient at scale.
+>
+> You can switch strategies by modifying the `Dockerfile` to run the desired script.
+
 ---
 
-## Join Stage: Curated Layer --> da aggiornare!!!!
+## Join stage: curated layer 
 
-### `join-eu-ugc-qdrant-to-curated/join_eu_ugc_qdrant.py`
+### `join-eu-ugc-qdrant-to-curated/join_eu_ugc_qdrant_merge.py`
 
-A long-running Spark job that:
-- Monitors the `user_generated/` Delta table
-- Joins new annotations (by `object_id` → `guid`) with metadata from `europeana/`
-- Appends the result to `s3a://heritage/curated/join_metadata/`
+This script continuously performs a **join** between Europeana metadata and user annotations, using only validated (non-duplicate) objects. 
+The result is a clean, enriched view for each cultural heritage item, ready for analysis, export, and recommendation.
 
-It keeps track of the most recent annotation timestamp and only processes new rows. Joins are done every 60 seconds, and Europeana metadata is refreshed every 15 minutes.
+It merges three sources:
+- **Europeana metadata** from `cleansed/europeana/`
+- **User annotations** from `cleansed/user_generated/`
+- **Deduplication check** from Qdrant (via `canonical_id`)
+
+The common key used for the join is `guid`.
+
+#### The process involves:
+
+1. **Full outer join** between Europeana metadata and user annotations on `guid`.  
+   This ensures that:
+   - Europeana records without annotations are retained
+   - Annotated items are enriched with metadata
+   - The underlying assumption is that UGC' guids always come from europeana 
+
+2. **Filtering by Qdrant deduplication**:  
+   Only records whose `guid` appears in Qdrant as a canonical object (or as a 'duplicate mapped to a canonical_id') are preserved.
+   Thanks to `canonical_id`, annotations originally attached to duplicate objects are correctly reassigned to the canonical version — so no user input is lost.
+
+3. **Delta Table writing with merge logic**:  
+   - The table is updated incrementally using `MERGE`:
+     - If a match is found on `(guid, timestamp, user_id)`, the record is updated
+     - If not, the annotation is inserted
+   - This avoids duplicates and ensures idempotency.
+
+   Previously, we used an `overwrite` strategy, but it proved computationally expensive.  
+   The old implementation (`join_eu_ugc_qdrant_overwrite.py`) is still available and can be re-enabled by modifying the Dockerfile.
+
+The result is a **Delta Table**, where each row represents one user annotation joined with the corresponding Europeana metadata, stored at: `s3a://heritage/curated/join_metadata_deduplicated/`
 
 ---
 
@@ -107,7 +142,8 @@ spark-apps/
 │   └── Dockerfile                                  # Container definition for the UGC → RAW Spark job
 │
 ├── eu-to-cleansed/
-│   ├── metadata_to_delta_table.py                  # Batch job: parses and deduplicates Europeana raw JSON into Delta format
+│   ├── eu_raw_to_cleansed_merge.py                 # Batch job: parses and deduplicates Europeana raw JSON into Delta
+│   ├── eu_raw_to_cleansed_overwrite.py             # Older version with overwrite
 │   ├── scheduler.py                                # Periodic trigger for metadata cleansing job
 │   └── Dockerfile                                  # Container for the EU → CLEANSING job and scheduler
 │
@@ -117,7 +153,8 @@ spark-apps/
 │   └── Dockerfile                                  # Container for the UGC → CLEANSING job and scheduler
 │
 ├── join-eu-ugc-qdrant-to-curated/
-│   ├── join_eu_ugc_qdrant.py                       # Streaming job: joins UGC and metadata into the curated layer
+│   ├── join_eu_ugc_qdrant_merge.py                 # Streaming job: joins UGC and metadata into the curated layer
+│   ├── join_eu_ugc_qdrant_overwrite.py             # Version with overwrite
 │   ├── requirements.txt                            # Python and Spark dependencies for the join jobs
 │   └── Dockerfile                                  # Container for the join job
 │
