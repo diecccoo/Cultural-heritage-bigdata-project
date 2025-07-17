@@ -126,23 +126,13 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
             where_clauses.append("creator = %s")
             params.append(filters['creator'])
         
-        # --- MODIFICA CRUCIALE QUI PER 'provider' ---
-        # Se 'provider' è una singola stringa TEXT e filters['provider'] è una lista (es. ['The European Library', 'CARARE']),
-        # dobbiamo cercare se il valore della colonna 'provider' è IN quella lista.
         if filters.get('provider'):
-            # Creiamo un placeholder per ogni elemento della lista dei provider selezionati
             placeholders = ','.join(['%s'] * len(filters['provider']))
-            # Aggiungiamo la clausola IN alla lista delle condizioni WHERE
             where_clauses.append(f"provider IN ({placeholders})")
-            # Estendiamo i parametri con i valori della lista dei provider selezionati
             params.extend(filters['provider'])
         
-        # La parte per 'tags' (che hai detto di non aver modificato e dovrebbe essere stringa "[]")
-        # Dovrebbe rimanere come nell'ultima correzione che ti ho fornito,
-        # che usa string_to_array e TRIM per gestire il formato "[tag1, tag2]".
-        # Se non l'hai applicata, dovresti farlo, altrimenti avrai un errore simile.
         if filters.get('tags'):
-            where_clauses.append("tags && %s::TEXT[]") # Usiamo direttamente l'operatore && tra l'array della colonna e l'array del filtro
+            where_clauses.append("tags && %s::TEXT[]")
             params.append(filters['tags'])
         where_string = " AND ".join(where_clauses)
 
@@ -215,7 +205,6 @@ def get_all_annotations_for_guid(guid: str) -> List[Dict]:
         st.error(f"Errore nel recupero di tutte le annotazioni per l'oggetto: {str(e)}")
         return []
 
-# <--- MODIFICA: Funzione `get_recommendations` aggiornata --->
 def get_recommendations(guid: str) -> List[Dict]:
     """Ottiene raccomandazioni simili da Qdrant"""
     client = get_qdrant_client()
@@ -249,7 +238,6 @@ def get_recommendations(guid: str) -> List[Dict]:
             collection_name="heritage_embeddings",
             query_vector=NamedVector(name="combined", vector=query_vector_data),
             limit=11,
-            # score_threshold=0.75, # <--- MODIFICA: Rimosso per garantire sempre dei risultati
             append_payload=True
         )
         
@@ -280,7 +268,6 @@ def get_recommendations(guid: str) -> List[Dict]:
         st.error(f"Errore nel recupero raccomandazioni: {str(e)}")
         return []
 
-# <--- MODIFICA: Aggiunta la funzione di callback per il reset dei filtri --->
 def reset_filters_callback():
     """Resetta i filtri e genera un nuovo seed casuale."""
     st.session_state.creator_filter = None
@@ -298,7 +285,6 @@ def decrement_page():
     logger.info(f"Pagina precedente (callback): {st.session_state.current_page}")
 
 
-# @st.cache_data # Potresti voler cachare anche questa funzione per performance
 def process_image(image_url: str, target_width: int = 200, target_height: int = 200) -> Image.Image:
     """
     Scarica e processa un'immagine, ridimensionandola per adattarsi al riquadro
@@ -312,15 +298,6 @@ def process_image(image_url: str, target_width: int = 200, target_height: int = 
         # Ridimensiona l'immagine mantenendo l'aspect ratio per adattarsi al riquadro
         img.thumbnail((target_width, target_height), Image.LANCZOS)
 
-        # Crea un'immagine di sfondo (canvas) delle dimensioni target
-        # E incolla l'immagine ridimensionata al centro.
-        # Il colore di sfondo sarà trasparente se l'immagine originale ha un canale alpha,
-        # altrimenti sarà nero per impostazione predefinita. Puoi specificarlo: color=(0,0,0) per nero
-        # o color=(240,240,240) per un grigio chiaro.
-        
-        # Per un background solido e visibile, puoi creare una nuova immagine con il colore desiderato
-        # e poi incollare l'immagine processata sopra.
-        
         background_color = (30, 30, 30) # Un colore scuro che si abbini al tema di Streamlit
         
         # Creiamo un'immagine con il colore di sfondo desiderato
@@ -369,7 +346,6 @@ def render_gallery_view():
             key="tags_filter"
         )
 
-        # <--- MODIFICA: Il pulsante ora usa la funzione di callback --->
         st.button("Reset Filters", on_click=reset_filters_callback)
 
     filters_changed = (
@@ -413,8 +389,6 @@ def render_gallery_view():
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
                     
                     with col:
-                        # Processa l'immagine prima di visualizzarla
-                        # Puoi scegliere dimensioni diverse per la galleria
                         processed_img = process_image(image_url, target_width=200, target_height=200)
                         st.image(processed_img, use_column_width=True, caption=item.get('title', ''))
                         if st.button(f"More details", key=f"detail_{item['id']}"):
@@ -428,13 +402,11 @@ def render_gallery_view():
         col1, col2, col3 = st.columns([1, 2, 1])
         with col1:
             if st.session_state.current_page > 1:
-                # Usa la callback on_click per il pulsante "Previous"
                 st.button("Previous", on_click=decrement_page)
         with col2:
             st.write(f"Page {st.session_state.current_page} of {max_pages}")
         with col3:
             if st.session_state.current_page < max_pages:
-                # Usa la callback on_click per il pulsante "Next"
                 st.button("Next", on_click=increment_page)
    
 
@@ -442,7 +414,6 @@ def render_detail_view():
     """Renderizza la vista dettagli oggetto"""
     if st.button("Back to Gallery"):
         st.session_state.current_view = 'gallery'
-        # Rimuovi l'associazione esplicita dei filtri per permettere a st.rerun() di ridisegnare i widget con i valori di session_state
         st.rerun()
 
     guid = st.session_state.current_guid
@@ -456,8 +427,7 @@ def render_detail_view():
 
     with col_left:
         image_url = get_image_url(guid_data.get('image_url', []), guid_data.get('isShownBy', []))
-        # Per la vista dettagli, potresti volere un'immagine più grande
-        processed_img = process_image(image_url, target_width=450, target_height=450) #MODIFICARE: Dimensioni per la vista dettagli
+        processed_img = process_image(image_url, target_width=450, target_height=450)
         st.image(processed_img, use_column_width=True)
         if guid_data.get('title'):
             st.caption(guid_data['title'])
@@ -467,10 +437,9 @@ def render_detail_view():
         metadata_fields = [
             ('Title', 'title'), ('Creator', 'creator'), ('Description', 'description'),
             ('Type', 'type'), ('Rights', 'edm_rights'),
-            ('Data Provider', 'provider'), #('Language', 'language')
+            ('Data Provider', 'provider'),
         ]
         for label, field in metadata_fields:
-            # Queste righe devono essere indentate all'interno del ciclo for
             value = guid_data.get(field)
             
             if isinstance(value, list):
@@ -480,22 +449,40 @@ def render_detail_view():
                 
             st.write(f"**{label}:** {display_value}")
 
-        st.subheader("Comments")
-        all_annotations = get_all_annotations_for_guid(guid)
-        meaningful_annotations = [
-            ann for ann in all_annotations
-            if ann.get('comment') or ann.get('user_id') or (ann.get('tags') and len(ann['tags']) > 0)
-        ]
-        if meaningful_annotations:
-            for i, ann in enumerate(meaningful_annotations):
-                st.markdown(f"---")
-                st.write(f"**Comment #{i+1}**")
-                if ann.get('user_id'): st.write(f"**User ID:** {ann['user_id']}")
-                if ann.get('timestamp'): st.write(f"**Timestamp:** {ann['timestamp']}")
-                if ann.get('comment'): st.write(f"**Comment:** {ann['comment']}")
-                if ann.get('tags'): st.write(f"**Tags:** {', '.join(ann['tags']) if isinstance(ann['tags'], list) else ann['tags']}")
-        else:
-            st.info("No comments for this object.")
+        st.markdown("---") # Linea per separare la descrizione dai commenti
+        
+        # Qui usiamo il singolo expander per tutta la sezione commenti
+        with st.expander("Show Comments"):
+            all_annotations = get_all_annotations_for_guid(guid)
+            meaningful_annotations = [
+                ann for ann in all_annotations
+                if ann.get('comment') or ann.get('user_id') or (ann.get('tags') and len(ann['tags']) > 0)
+            ]
+
+            if meaningful_annotations:
+                for i, ann in enumerate(meaningful_annotations):
+                    # Usiamo st.markdown per un titolo del commento
+                    st.markdown(f"**Comment #{i+1}**")
+                    if ann.get('user_id'): st.write(f"**User ID:** {ann['user_id']}")
+                    if ann.get('timestamp'): st.write(f"**Timestamp:** {ann['timestamp']}")
+                    if ann.get('comment'): st.write(f"**Comment:** {ann['comment']}")
+                    
+                    # Formattazione dei tags come "pillole"
+                    if ann.get('tags'):
+                        tags_list = ann['tags'] if isinstance(ann['tags'], list) else [ann['tags']]
+                        if tags_list:
+                            tags_formatted = " ".join([f"``{tag.strip()}``" for tag in tags_list if tag.strip()])
+                            st.markdown(f"**Tags:** {tags_formatted}")
+                        else:
+                            st.write("**Tags:** N/A")
+                    else:
+                        st.write("**Tags:** N/A")
+                    
+                    # Aggiungiamo un separatore per ogni commento, tranne l'ultimo
+                    if i < len(meaningful_annotations) - 1:
+                        st.divider() # Usa una linea sottile per separare i commenti
+            else:
+                st.info("No comments for this object.")
 
     st.subheader("Similar objects")
     recommendations = get_recommendations(guid)
@@ -508,7 +495,6 @@ def render_detail_view():
                     item = recommendations[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
                     with col:
-                        # Processa anche qui le immagini simili
                         processed_img = process_image(image_url, target_width=180, target_height=180) # Dimensioni adatte per la sezione simili
                         st.image(processed_img, use_column_width=True)
                         if st.button(f"More details", key=f"rec_{item['id']}"):
