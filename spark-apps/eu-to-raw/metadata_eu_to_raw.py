@@ -1,6 +1,3 @@
-# kafka_europeana_metadata_to_minio.py
-#script di matteo che prende i dati da kafka e li scrive su delta lake con spark
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col
 import traceback
@@ -12,7 +9,7 @@ import re
 def sanitize_filename(name):
     return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
-# Schema dei metadati Europeana
+# Schema of metadata Europeana
 schema = StructType() \
     .add("title", StringType()) \
     .add("guid", StringType()) \
@@ -34,7 +31,7 @@ spark = None
 query = None
 
 try:
-    # Inizializza SparkSession
+    # Initialize SparkSession
     spark = SparkSession.builder \
         .appName("EuropeanaKafkaToMinIO") \
         .config("spark.jars.packages",
@@ -51,7 +48,7 @@ try:
         .getOrCreate()
     
     spark.sparkContext.setLogLevel("WARN")
-    print("✅ SparkSession inizializzata")
+    print("SparkSession initialized")
 
     raw_df = spark.readStream \
         .format("kafka") \
@@ -62,37 +59,37 @@ try:
         .load() \
 
 
-    print("📥 Connessione a Kafka stabilita, topic: europeana_metadata")
+    print("Connection to Kafka established, topic: europeana_metadata")
 
 
 # Parsing JSON
     parsed_df = raw_df.selectExpr("CAST(value AS STRING) as json") \
             .select(from_json(col("json"), schema).alias("data")) \
             .select("data.*")
-    
-    print("🧠 Schema applicato, avvio del writeStream...")
+
+    print("Schema applied, starting writeStream...")
 
 
-    # Scrittura su Delta Lake (MinIO)
+    # Write to Delta Lake (MinIO)
     def write_each_row_as_json(batch_df, batch_id):
-        print(f"📦 Scrittura batch {batch_id}...")
+        print(f"Writing batch {batch_id}...")
         
         s3_base = "s3a://heritage/raw/metadata/europeana_metadata/"
         rows = batch_df.collect()
 
         for row in rows:
             try:
-                # Usa il guid oppure crea un nome univoco
+                # Use the guid or create a unique name
                 guid = row["guid"] or f"no-guid-{uuid.uuid4()}"
                 safe_guid = sanitize_filename(guid)
                 file_name = f"{safe_guid}.json"
                 file_path = s3_base + file_name
 
 
-                # Converto riga in JSON puro (dict -> str)
+                # Convert the row to pure JSON (dict -> str)
                 json_data = json.dumps(row.asDict())
 
-                # Scrivo usando Hadoop FileSystem API di Spark
+                # Write using Hadoop FileSystem API di Spark
                 hadoop_conf = spark._jsc.hadoopConfiguration()
                 fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(
                     spark._jvm.java.net.URI(s3_base),
@@ -103,10 +100,10 @@ try:
                 output_stream.write(bytearray(json_data, "utf-8"))
                 output_stream.close()
 
-                # print(f"✅ Scritto: {file_name}")
+                # print(f"Written: {file_name}")
             except Exception as e:
-                print(f"❌ Errore nella scrittura di {row}: {e}")
-        print(f"📦 Batch {batch_id} completato")
+                print(f"Error writing {row}: {e}")
+        print(f"Batch {batch_id} completed")
 
     query = parsed_df.writeStream \
     .foreachBatch(write_each_row_as_json) \
@@ -119,12 +116,12 @@ try:
     query.awaitTermination()
 
 except Exception as e:
-    print("❌ Errore durante l'esecuzione del consumer:")
+    print("Error occurred while running the consumer:")
     traceback.print_exc()
 
 
 finally:
-    print("🛑 Shutdown del job Spark")
+    print("Shutdown del job Spark")
     if query:
         try:
             query.stop()

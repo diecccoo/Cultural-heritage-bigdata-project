@@ -9,7 +9,7 @@ def log(msg):
 
 spark = SparkSession.builder.appName("CuratedToPostgres").getOrCreate()
 
-# Configura MinIO
+# Config MinIO
 hadoopConf = spark._jsc.hadoopConfiguration()
 hadoopConf.set("fs.s3a.endpoint", "http://minio:9000")
 hadoopConf.set("fs.s3a.access.key", "minio")

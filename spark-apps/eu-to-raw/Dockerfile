@@ -1,19 +1,19 @@
 FROM bitnami/spark:3.5.5
 
-# Usa root per installazioni
+# Uses root for installations
 USER root
 WORKDIR /app
 
-# Installa le librerie Python
+# Installs Python libraries
 RUN pip install --no-cache-dir pyspark==3.5.5 delta-spark==3.3.1
 
-# Torna all'utente non-root
+# Switch back to non-root user
 USER 1001
 
-# Copia gli script nello container
+# Copy scripts into the container
 COPY spark-apps/eu-to-raw/ .
 
-# Avvio dello script con i pacchetti necessari: Delta + Kafka
+# Start the script with the necessary packages: Delta + Kafka
 CMD spark-submit \
   --master local[*] \
   --packages io.delta:delta-spark_2.12:3.3.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.5 \

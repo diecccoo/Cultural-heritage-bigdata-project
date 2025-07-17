@@ -1,4 +1,3 @@
-# funziona
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json, lit, current_timestamp, max
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType
@@ -24,7 +23,7 @@ RAW_PATH = "s3a://heritage/raw/metadata/user_generated_content/"
 CLEANSED_PATH = "s3a://heritage/cleansed/user_generated/"
 SOURCE_NAME = "kafka:user_annotations"
 
-# === SCHEME OF JSON DATA INSIDE “value” ===
+# === SCHEMA OF JSON DATA INSIDE “value” ===
 ugc_schema = StructType([
     StructField("guid", StringType(), True),
     StructField("user_id", StringType(), True),
