@@ -164,9 +164,7 @@ It merges three sources:
 The common key used for the join is `guid`.
 
 
-#### Join Logic
-
-The process involves:
+####The process involves:
 
 1. **Full outer join** between Europeana metadata and user annotations on `guid`.  
    This ensures that:
@@ -189,37 +187,9 @@ The process involves:
 
 
 #### Output
-
 The result is a **Delta Table**, where each row represents one user annotation joined with the corresponding Europeana metadata, stored at: `s3a://heritage/curated/join_metadata_deduplicated/`
 
-Each row contains:
-
-```text
-guid
-user_id
-tags
-comment
-timestamp
-location
-ingestion_time
-source
-timestamp_cleansed
-creator
-dataProvider
-description
-edm_rights
-format
-image_url
-isShownAt
-language
-provider
-rights
-subject
-timestamp_created
-title
-type
-joined_at
-
+---
 
 ### 5.6 Serving Layer
 
