@@ -305,7 +305,7 @@ docker compose restart streamlit
 
 ## 7. Results
 
-Testing our pipeline, we've seen this performance by Docker:
+Testing our pipeline, we've seen this performances by Docker:
 
 ![Docker performance](readme_images/docker_performance.jpeg)
 
