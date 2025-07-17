@@ -25,9 +25,11 @@ This document provides a comprehensive overview of the system architecture, tech
   - [6.1 Services, Volumes, and Network](#61-services-volumes-and-network)
 - [7. Results](#7-results)
   - [7.1 Dashboard Features](#71-dashboard-features)
-- [10. Limitations & Future Work](#10-limitations--future-work)
-- [11. References & Acknowledgments](#11-references--acknowledgments)
-- [12. Authors & Contact](#12-authors--contact)
+- [8. Limitations and Future Work](#8-limitations--future-work)
+  - [8.1 Current limitations](#81-current--limitations)
+  - [8.2 Future work](#81-future--work)
+- [9. References](#9-references)
+- [10. Authors](#10-authors)
 
 ## 1. Overview
 
@@ -193,7 +195,7 @@ For Europeana metadata, the job reads the JSON files, filters out malformed or i
 
 For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance (you can find both scripts in the `eu-to-cleansed/` folder, and you can decide the one to run in the file `scheduler.py` in the same folder). In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
 
-### 5.4 Machine learning model
+### 5.4 Machine Learning Model
 This layer is responsible for enriching cleaned cultural heritage metadata with semantic embeddings, enabling both deduplication and recommendation functionalities.
 
 We use **CLIP ViT-B/32**, a multimodal model from Hugging Face, to extract:
@@ -219,7 +221,7 @@ To llustrate how Qdrant  organizes and retrieves embeddings, we recorded a short
 
 ![Qdrant Demo Video](readme_images/qdrant.gif)
 
-### 5.5 Curated layer
+### 5.5 Curated Layer
 This module continuously performs a **join** between Europeana metadata and user annotations, using only validated (non-duplicate) objects. 
 The result is a clean, enriched view for each cultural heritage item, ready for analysis, export, and recommendation.
 
@@ -371,9 +373,9 @@ Here, we have a comparison of our recommendations, based on text and image simil
 
 ---
 
-## 10. Limitations and future work
+## 8. Limitations and future work
 
-### 10.1 Current limitations
+### 8.1 Current limitations
 
 - **Single Kafka broker limits fault tolerance**  
   The current architecture relies on a single Kafka broker with minimal replication. This setup lacks fault tolerance, if the broker goes down, no messages can be ingested or processed. In a production environment, Kafka should be deployed with multiple brokers and partitions to ensure high availability and resilience.
@@ -394,7 +396,7 @@ Here, we have a comparison of our recommendations, based on text and image simil
   Qdrant is a critical dependency for deduplication and recommendations. If Qdrant becomes unreachable or corrupted, deduplication fails, and the curated data cannot be joined or exported to PostgreSQL. As a result, the dashboard becomes non-functional, revealing a single point of failure in the current design.
 
 
-### 10.2 Future work
+### 8.2 Future work
 
 - **Add Redis as a vector cache layer**  
   Introducing Redis as a high-speed vector cache could significantly reduce the number of calls to Qdrant for repeated similarity searches. This would improve response times for recommendations on the dashboard and reduce the computational load on both Qdrant and PostgreSQL.
@@ -413,7 +415,7 @@ Here, we have a comparison of our recommendations, based on text and image simil
 
 ---
 
-## 11. References
+## 9. References
 
 - [PostgreSQL vs Redis](https://risingwave.com/blog/postgresql-vs-redis-performance-and-use-case-comparison/)
 
@@ -426,7 +428,7 @@ Here, we have a comparison of our recommendations, based on text and image simil
 - [Europeana API Key](https://pro.europeana.eu/page/get-api)
 
 
-## 12. Authors contact
+## 10. Authors
 This project was developed by Group number 8 represented by:
 
 1. Silvia Bortoluzzi - [@silviabortoluzzi](https://github.com/silviabortoluzzi)
