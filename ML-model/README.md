@@ -79,8 +79,8 @@ The script:
     "status": "pending"
   },
   "vectors": {
-    "combined": [...],  // 1024-dimensional vector (image + text)
-    "image": [...]      // 512-dimensional vector (image only)
+    "combined": [0.123, 0.456, 0.789  ],  // 1024-dimensional vector (image + text)
+    "image": [0.101, 0.202, 0.303   ]      // 512-dimensional vector (image only)
   }
 }
 ```
@@ -139,8 +139,8 @@ If the Qdrant `search()` API fails or returns no candidates:
     "processed_at": "2025-07-13T10:42:00"
   },
   "vectors": {
-    "combined": [...],  
-    "image": [...]      
+    "combined": [0.123, 0.456, 0.789   ],  
+    "image": [0.101, 0.202, 0.303   ]      
   }
 }
 ```
