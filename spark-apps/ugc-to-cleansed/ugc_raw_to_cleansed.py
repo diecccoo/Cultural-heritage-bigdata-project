@@ -38,15 +38,15 @@ ugc_schema = StructType([
 try:
     df_existing = spark.read.format("delta").load(CLEANSED_PATH)
     last_ts = df_existing.select(max("timestamp_cleansed")).first()[0]
-    print(f"[INFO] Ultimo timestamp_cleansed presente in Delta: {last_ts}")
+    print(f"[INFO] Last timestamp_cleansed present in Delta: {last_ts}")
 except Exception as e:
     last_ts = None
-    print(f"[INFO] Nessun file Delta trovato, procedo da zero: {e}")
+    print(f"[INFO] No Delfa found: {e}")
 
 # === LETTURA DATI GREZZI ===
-print("[INFO] Inizio lettura dei file JSON dal raw layer...")
+print("[INFO] Starting the reading of JSON files from raw layer...")
 df_raw = spark.read.json(RAW_PATH)
-print(f"[INFO] File letti: {df_raw.count()} record totali.")
+print(f"[INFO] File read: {df_raw.count()} records.")
 
 # === PARSING DEL CAMPO 'value' E MANTENIMENTO METADATI ===
 df_parsed = (
@@ -83,8 +83,8 @@ if count_new > 0:
         .option("compression", "snappy")
         .save(CLEANSED_PATH)
     )
-    print(f"[✅] Scritti {count_new} nuovi record in cleansed.")
+    print(f"Written {count_new} new records in CLEANSED.")
 else:
-    print("[🟡] Nessun nuovo record da scrivere.")
+    print("We don't have new records to write.")
 
 spark.stop()
