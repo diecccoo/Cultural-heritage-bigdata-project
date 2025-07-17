@@ -3,20 +3,20 @@ pyspark==3.5.5
 delta-spark==3.3.1
 
 # ======== Deep Learning (CLIP) ========
-torch          # PyTorch core
-torchvision    # Per il supporto immagini
-transformers   # CLIP e altri modelli HuggingFace
+torch          
+torchvision    
+transformers   
 
-# ======== Utility scientifiche ========
-pillow         # Per apertura immagini
+# ======== Utility  ========
+pillow         
 pandas
 numpy
 
-# ======== MinIO / S3 Supporto ========
-boto3          # Per scrivere/leggere file da MinIO via S3 API
+# ======== MinIO / S3  ========
+boto3         
 
 # ======== HTTP e parsing ========
-requests       # Per scaricare immagini da URL
+requests       
 
 # ======== Qdrant vector DB client ========
-qdrant-client  # Per inserire embeddings in Qdrant
+qdrant-client  

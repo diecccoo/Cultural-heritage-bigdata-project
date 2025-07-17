@@ -11,17 +11,17 @@ from PIL import Image
 import requests
 from io import BytesIO
 
-# Configurazione logging
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Flag per errori di connessione
+# Flag for session state to track connection errors
 if 'db_conn_error_shown' not in st.session_state:
     st.session_state.db_conn_error_shown = False
 if 'qdrant_conn_error_shown' not in st.session_state:
     st.session_state.qdrant_conn_error_shown = False
 
-# Configurazione database
+# Configure database
 DB_CONFIG = {
     'host': 'postgres',
     'port': 5432,
@@ -30,49 +30,49 @@ DB_CONFIG = {
     'password': 'postgres'
 }
 
-# Configurazione Qdrant
+# Configure Qdrant
 QDRANT_CONFIG = {
     'host': 'qdrant',
     'port': 6333
 }
 
-# Configurazione app
+# Configure app
 PAGE_SIZE = 20
 MAX_RESULTS = 60
 PLACEHOLDER_IMAGE = "https://via.placeholder.com/300?text=Non+trovata"
 
 @st.cache_resource
 def get_db_connection():
-    """Crea connessione al database PostgreSQL"""
+    """Create database connection PostgreSQL"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         st.session_state.db_conn_error_shown = False
         return conn
     except Exception as e:
         if not st.session_state.db_conn_error_shown:
-            logger.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
-            st.error(f"⚠️ Connessione fallita al database PostgreSQL: {str(e)}")
+            logger.error(f"Connection failed to database PostgreSQL: {str(e)}")
+            st.error(f"Connection failed to database PostgreSQL: {str(e)}")
             st.session_state.db_conn_error_shown = True
         return None
 
 @st.cache_resource
 def get_qdrant_client():
-    """Crea client Qdrant"""
+    """Create client Qdrant"""
     try:
         client = QdrantClient(host=QDRANT_CONFIG['host'], port=QDRANT_CONFIG['port'])
         client.get_collections()
-        logger.info("Connessione a Qdrant stabilita con successo.")
+        logger.info("Connection to Qdrant successfully established.")
         st.session_state.qdrant_conn_error_shown = False
         return client
     except Exception as e:
         if not st.session_state.qdrant_conn_error_shown:
-            logger.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
-            st.error(f"⚠️ Connessione fallita a Qdrant: {str(e)}")
+            logger.error(f"Connection failed to Qdrant: {str(e)}")
+            st.error(f"Connection failed to  Qdrant: {str(e)}")
             st.session_state.qdrant_conn_error_shown = True
         return None
 
 def get_image_url(image_url_array: List[str], is_shown_by_array: List[str]) -> str:
-    """Ottiene il primo URL di immagine valido o placeholder"""
+    """Gets the first valid image URL or placeholder"""
     if image_url_array and len(image_url_array) > 0 and image_url_array[0]:
         return image_url_array[0]
     elif is_shown_by_array and len(is_shown_by_array) > 0 and is_shown_by_array[0]:
@@ -82,7 +82,7 @@ def get_image_url(image_url_array: List[str], is_shown_by_array: List[str]) -> s
 
 @st.cache_data
 def get_filter_options() -> Dict[str, List[str]]:
-    """Carica opzioni per filtri dropdown e multiselect"""
+    """Load options for dropdown and multiselect filters"""
     conn = get_db_connection()
     if not conn:
         return {}
@@ -108,7 +108,7 @@ def get_filter_options() -> Dict[str, List[str]]:
         return {}
 
 def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Optional[float] = None) -> Tuple[List[Dict], int]:
-    """Ricerca oggetti con filtri, ordinamento casuale e paginazione."""
+    """Object search with filters, random sorting and pagination."""
     conn = get_db_connection()
     if not conn:
         return [], 0
@@ -136,13 +136,13 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
             params.append(filters['tags'])
         where_string = " AND ".join(where_clauses)
 
-        # Query per il conteggio totale
+        # Queryfor total count of distinct GUIDs
         count_query = f"SELECT COUNT(DISTINCT guid) FROM join_metadata_deduplicated WHERE {where_string}"
         cursor.execute(count_query, params)
         total_count = cursor.fetchone()[0]
-        total_count = min(total_count, MAX_RESULTS) # Limita il conteggio massimo dei risultati
+        total_count = min(total_count, MAX_RESULTS) # Limit to MAX_RESULTS
 
-        # Subquery per ottenere gli elementi distinti, poi ordinamento casuale e paginazione
+        # Subquery to get the distinct elements, then random sorting and pagination
         subquery = f"SELECT DISTINCT ON (guid) * FROM join_metadata_deduplicated WHERE {where_string} ORDER BY guid, id"
         query_paginated = f"SELECT * FROM ({subquery}) AS distinct_items ORDER BY RANDOM() LIMIT %s OFFSET %s"
         
@@ -156,12 +156,12 @@ def search_guids(filters: Dict, page: int, page_size: int = PAGE_SIZE, seed: Opt
         return results, total_count
 
     except Exception as e:
-        logger.error(f"Errore nella ricerca: {str(e)}")
-        st.error(f"Errore nella ricerca: {str(e)}")
+        logger.error(f"Error in search: {str(e)}")
+        st.error(f"Error in search: {str(e)}")
         return [], 0
 
 def get_guid_details(guid: str) -> Optional[Dict]:
-    """Ottiene dettagli di un singolo oggetto"""
+    """obtains details of a single object"""
     conn = get_db_connection()
     if not conn:
         return None
@@ -182,11 +182,11 @@ def get_guid_details(guid: str) -> Optional[Dict]:
             return None
             
     except Exception as e:
-        st.error(f"Errore nel recupero dettagli: {str(e)}")
+        st.error(f"Error in retrieving details: {str(e)}")
         return None
 
 def get_all_annotations_for_guid(guid: str) -> List[Dict]:
-    """Ottiene tutte le annotazioni (righe) per un dato guid."""
+    """Gets all annotations (rows) for a given guid."""
     conn = get_db_connection()
     if not conn:
         return []
@@ -202,18 +202,18 @@ def get_all_annotations_for_guid(guid: str) -> List[Dict]:
         return results
 
     except Exception as e:
-        st.error(f"Errore nel recupero di tutte le annotazioni per l'oggetto: {str(e)}")
+        st.error(f"Error in retrieving all annotations for the object: {str(e)}")
         return []
 
 def get_recommendations(guid: str) -> List[Dict]:
-    """Ottiene raccomandazioni simili da Qdrant"""
+    """Gets similar recommendations from Qdrant"""
     client = get_qdrant_client()
     if not client:
-        logger.warning("Client Qdrant non disponibile, impossibile ottenere raccomandazioni.")
+        logger.warning("Qdrant client unavailable, unable to get recommendations.")
         return []
     
     try:
-        logger.info(f"Cercando vettore per guid: {guid} in Qdrant.")
+        logger.info(f"Searching vector for guid: {guid} in Qdrant.")
         search_result = client.scroll(
             collection_name="heritage_embeddings",
             scroll_filter={"must": [{"key": "guid", "match": {"value": guid}}]},
@@ -222,17 +222,17 @@ def get_recommendations(guid: str) -> List[Dict]:
         )
         
         if not search_result[0]:
-            logger.warning(f"Nessun vettore trovato in Qdrant per guid: {guid}")
+            logger.warning(f"No vectors found in Qdrant per guid: {guid}")
             return []
         
         current_named_vectors = search_result[0][0].vector
         query_vector_data = current_named_vectors.get("combined")
         
         if query_vector_data is None:
-            logger.error("Vettore 'combined' non trovato per l'oggetto corrente.")
+            logger.error("Vector ‘combined’ not found for current object.")
             return []
 
-        logger.info(f"Vettore trovato per guid: {guid}. Inizio ricerca oggetti simili.")
+        logger.info(f"Vector found for guid: {guid}. Beginning search for similar items.")
         
         similar_results = client.search(
             collection_name="heritage_embeddings",
@@ -244,7 +244,7 @@ def get_recommendations(guid: str) -> List[Dict]:
         similar_ids = [res.payload["guid"] for res in similar_results if res.payload and "guid" in res.payload and res.payload["guid"] != guid]
         similar_ids = similar_ids[:10]
         
-        logger.info(f"Trovati {len(similar_ids)} ID oggetti simili: {similar_ids}")
+        logger.info(f"Found {len(similar_ids)} similar ID objects : {similar_ids}")
 
         if similar_ids:
             conn = get_db_connection()
@@ -257,19 +257,19 @@ def get_recommendations(guid: str) -> List[Dict]:
                 columns = [desc[0] for desc in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
                 cursor.close()
-                logger.info(f"Recuperati {len(results)} metadati per oggetti simili da PostgreSQL.")
+                logger.info(f"Retrieved {len(results)} metadata for similar objects from PostgreSQL.")
                 return results
         
-        logger.info("Nessun ID oggetto simile da recuperare o connessione DB fallita.")
+        logger.info("No similar object ID to retrieve or DB connection failed.")
         return []
         
     except Exception as e:
-        logger.error(f"Errore nel recupero raccomandazioni: {str(e)}")
-        st.error(f"Errore nel recupero raccomandazioni: {str(e)}")
+        logger.error(f"Error in retrieving recommendations: {str(e)}")
+        st.error(f"Error in retrieving recommendations: {str(e)}")
         return []
 
 def reset_filters_callback():
-    """Resetta i filtri e genera un nuovo seed casuale."""
+    """Reset filters and generate a new random seed."""
     st.session_state.creator_filter = None
     st.session_state.provider_filter = []
     st.session_state.tags_filter = []
@@ -278,50 +278,50 @@ def reset_filters_callback():
 
 def increment_page():
     st.session_state.current_page += 1
-    logger.info(f"Pagina successiva (callback): {st.session_state.current_page}")
+    logger.info(f"Next page (callback): {st.session_state.current_page}")
 
 def decrement_page():
     st.session_state.current_page -= 1
-    logger.info(f"Pagina precedente (callback): {st.session_state.current_page}")
+    logger.info(f"Next page (callback): {st.session_state.current_page}")
 
 
 def process_image(image_url: str, target_width: int = 200, target_height: int = 200) -> Image.Image:
     """
-    Scarica e processa un'immagine, ridimensionandola per adattarsi al riquadro
-    senza tagliare (emula object-fit: contain), aggiungendo padding se necessario.
-    """
+    Download and process an image, resizing it to fit the frame
+ without cropping (emulates object-fit: contain), adding padding if necessary.
+     """
     try:
-        response = requests.get(image_url, timeout=10) # Aggiunto timeout
-        response.raise_for_status() # Lancia un errore per risposte HTTP errate
+        response = requests.get(image_url, timeout=10) 
+        response.raise_for_status() 
         img = Image.open(BytesIO(response.content))
 
-        # Ridimensiona l'immagine mantenendo l'aspect ratio per adattarsi al riquadro
+        
         img.thumbnail((target_width, target_height), Image.LANCZOS)
 
-        background_color = (30, 30, 30) # Un colore scuro che si abbini al tema di Streamlit
+        background_color = (30, 30, 30) 
         
-        # Creiamo un'immagine con il colore di sfondo desiderato
+        
         new_img = Image.new('RGB', (target_width, target_height), background_color)
         
-        # Calcoliamo la posizione per centrare l'immagine ridimensionata
+        
         left = (target_width - img.width) // 2
         top = (target_height - img.height) // 2
         
-        # Incolliamo l'immagine ridimensionata sul nuovo sfondo
+        
         new_img.paste(img, (left, top))
         
         return new_img
 
     except requests.exceptions.RequestException as req_err:
-        logger.error(f"Errore di rete o HTTP durante il download di {image_url}: {req_err}")
+        logger.error(f"Network or HTTP error while downloading the {image_url}: {req_err}")
         return Image.new('RGB', (target_width, target_height), color = 'grey') # Placeholder
     except Exception as e:
-        logger.error(f"Errore generico nel processare l'immagine {image_url}: {e}")
+        logger.error(f"Generic error in processing the image {image_url}: {e}")
         return Image.new('RGB', (target_width, target_height), color = 'grey') # Placeholder
 
 
 def render_gallery_view():
-    """Renderizza la vista gallery con filtri e griglia"""
+    """Render gallery view with filters and grid"""
     st.title("🏛️ Cultural Heritage Dashboard")
 
     if 'filter_options' not in st.session_state:
@@ -380,10 +380,10 @@ def render_gallery_view():
     st.info(f"Found {total_results} objects")
 
     if gallery_data:
-        for row in range(5): # Assicurati che questo sia corretto per le tue 5 pagine x 20 = 100 risultati
-            cols = st.columns(4) # 4 colonne
+        for row in range(5): 
+            cols = st.columns(4) 
             for col_idx, col in enumerate(cols):
-                item_idx = row * 4 + col_idx # 4 immagini per riga
+                item_idx = row * 4 + col_idx
                 if item_idx < len(gallery_data):
                     item = gallery_data[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
@@ -411,7 +411,7 @@ def render_gallery_view():
    
 
 def render_detail_view():
-    """Renderizza la vista dettagli oggetto"""
+    """Render object detail view"""
     if st.button("Back to Gallery"):
         st.session_state.current_view = 'gallery'
         st.rerun()
@@ -449,9 +449,9 @@ def render_detail_view():
                 
             st.write(f"**{label}:** {display_value}")
 
-        st.markdown("---") # Linea per separare la descrizione dai commenti
+        st.markdown("---") 
         
-        # Qui usiamo il singolo expander per tutta la sezione commenti
+        
         with st.expander("Show Comments"):
             all_annotations = get_all_annotations_for_guid(guid)
             meaningful_annotations = [
@@ -461,13 +461,13 @@ def render_detail_view():
 
             if meaningful_annotations:
                 for i, ann in enumerate(meaningful_annotations):
-                    # Usiamo st.markdown per un titolo del commento
+                    
                     st.markdown(f"**Comment #{i+1}**")
                     if ann.get('user_id'): st.write(f"**User ID:** {ann['user_id']}")
                     if ann.get('timestamp'): st.write(f"**Timestamp:** {ann['timestamp']}")
                     if ann.get('comment'): st.write(f"**Comment:** {ann['comment']}")
                     
-                    # Formattazione dei tags come "pillole"
+                   
                     if ann.get('tags'):
                         tags_list = ann['tags'] if isinstance(ann['tags'], list) else [ann['tags']]
                         if tags_list:
@@ -478,9 +478,9 @@ def render_detail_view():
                     else:
                         st.write("**Tags:** N/A")
                     
-                    # Aggiungiamo un separatore per ogni commento, tranne l'ultimo
+                   
                     if i < len(meaningful_annotations) - 1:
-                        st.divider() # Usa una linea sottile per separare i commenti
+                        st.divider() 
             else:
                 st.info("No comments for this object.")
 
@@ -488,14 +488,14 @@ def render_detail_view():
     recommendations = get_recommendations(guid)
     if recommendations:
         for row in range(2):
-            cols = st.columns(5) # 5 colonne per le raccomandazioni
+            cols = st.columns(5) 
             for col_idx, col in enumerate(cols):
-                item_idx = row * 5 + col_idx # 5 immagini per riga
+                item_idx = row * 5 + col_idx 
                 if item_idx < len(recommendations):
                     item = recommendations[item_idx]
                     image_url = get_image_url(item.get('image_url', []), item.get('isShownBy', []))
                     with col:
-                        processed_img = process_image(image_url, target_width=180, target_height=180) # Dimensioni adatte per la sezione simili
+                        processed_img = process_image(image_url, target_width=180, target_height=180) 
                         st.image(processed_img, use_column_width=True)
                         if st.button(f"More details", key=f"rec_{item['id']}"):
                             st.session_state.current_guid = item['guid']
@@ -505,7 +505,7 @@ def render_detail_view():
 
         
 def initialize_session_state():
-    """Inizializza session state"""
+    """Initialize session state"""
     if 'current_view' not in st.session_state:
         st.session_state.current_view = 'gallery'
     if 'current_page' not in st.session_state:
@@ -520,7 +520,7 @@ def initialize_session_state():
         st.session_state.random_seed = random.random()
 
 def main():
-    """Funzione principale"""
+    """main"""
     st.set_page_config(page_title="Cultural Heritage Dashboard", page_icon="🏛️", layout="wide")
     
     initialize_session_state()
