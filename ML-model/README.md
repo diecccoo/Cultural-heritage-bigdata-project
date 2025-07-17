@@ -181,6 +181,7 @@ ML-model/
 
 ##  Future improvements
 - Allow points with `status = "failed"` to be retried after a timeout or under manual intervention
+- Consider switching or integrating the vector storage to Redis, as it is evolving into a unified data engine supporting vector embeddings and similarity search alongside traditional caching and key-based access. 
 
 ---
 ## Search Quality Evaluation
