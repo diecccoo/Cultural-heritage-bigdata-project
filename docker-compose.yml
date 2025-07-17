@@ -66,7 +66,6 @@ services:
         exec /tmp/create_kafka_topics.sh
     networks:
       - heritage-net
-  # Questo container esegue uno script per creare i topic iniziali in Kafka
 
 
   minio:
@@ -81,6 +80,7 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: minio123
     command: server /data --console-address ":9001"
+    restart: always
     networks:
       - heritage-net
 
@@ -100,9 +100,9 @@ services:
     environment:
       - SPARK_MODE=master
     ports:
-      # - "7077:7077"
       - "8080:8080"
     image: bitnami/spark:latest
+    restart: always
     networks:
       - heritage-net
 
@@ -197,6 +197,7 @@ services:
       - "6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
+    restart: always
     networks:
       - heritage-net
 
@@ -322,8 +323,6 @@ networks:
     driver: bridge
 
 
-
-
 volumes:
   minio-data:
   zookeeper-data:
@@ -331,6 +330,5 @@ volumes:
   spark-eutm:
   postgres-data:
   pgadmin-data:
-  # deduplication-data:
   hf-cache:
   qdrant-data:

@@ -1,5 +1,6 @@
-# Questo script Python serve per scaricare oggetti culturali (con immagini o testo) dall'API Europeana, uno alla volta per ciascun provider, e inviarli su Kafka (topic europeana_metadata). Tiene traccia di ciò che ha già scaricato per evitare duplicati e salva il suo stato per continuare nel tempo.
-# Estrae metadati Solo se c’è edmIsShownBy e guid nuovo
+# This Python script is used to download cultural objects (with images or text) from the Europeana API, one at a time for each provider, and send them to Kafka (topic europeana_metadata). It keeps track of what it has already downloaded to avoid duplicates and saves its status to continue over time.
+# Extracts metadata Only if there is edmIsShownBy and new guid.
+
 import requests
 import json
 import logging
@@ -11,10 +12,10 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 load_dotenv()
 
-# --- Configurazione ---
+# --- Configuration ---
 API_KEY = os.getenv("API_KEY")
-ROWS_PER_PAGE = 100  #sconsigliato da europeana sopra i 100
-MAX_PAGES_PER_HOUR = 5  # esempio: 100 (rows x page) x 20 = 2000 oggetti/x batch
+ROWS_PER_PAGE = 100  #not recommended by europeana above 100
+MAX_PAGES_PER_HOUR = 5  # example: 100 (rows x page) x 20 = 2000 objects/x batch
 MAX_RETRIES = 10
 BACKOFF_FACTOR = 2
 MAX_CONSECUTIVE_FAILURES = 7
@@ -60,7 +61,7 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode("utf-8")
 )
 
-# --- Carica stato ---
+# --- loads state ---
 if os.path.exists(OFFSET_FILE):
     with open(OFFSET_FILE, "r") as f:
         state = json.load(f)
@@ -74,11 +75,11 @@ else:
     downloaded_guids = set()
 
 
-# Modifica la costruzione dell'URL per renderla più robusta
+# Modify the construction of the URL to make it more robust
 def build_europeana_url(query, provider, cursor):
     base_url = "https://api.europeana.eu/record/v2/search.json"
     
-    # Costruisci i parametri della query in modo più pulito
+    # Construct query parameters in a cleaner way
     params = {
         "wskey": API_KEY,
         "query": query,
@@ -92,12 +93,12 @@ def build_europeana_url(query, provider, cursor):
         ]
     }
     
-    # Usa requests.get con params invece di costruire l'URL manualmente
+    
     return base_url, params
 
-# --- Loop su max pagine ---
+# --- Loop on max pages ---
 provider = PROVIDERS[state["provider_index"]]
-logging.info(f"🔍 Inizio: provider '{provider}'")
+logging.info(f"Inizio: provider '{provider}'")
 
 consecutive_failures = 0
 total_saved = 0
@@ -128,33 +129,33 @@ def fetch_with_retry(base_url, params):
             time.sleep(backoff)
             retries += 1
             backoff *= BACKOFF_FACTOR
-    logging.error("❌ Failed to fetch data after max retries.")
+    logging.error("Failed to fetch data after max retries.")
     return None
 
 
 while pages_fetched < MAX_PAGES_PER_HOUR:
     saved_this_round = 0
-    logging.info(f"🔁 Scrolling page {pages_fetched + 1} (provider: {provider})")
+    logging.info(f"Scrolling page {pages_fetched + 1} (provider: {provider})")
 
     base_url, params = build_europeana_url("*:*", provider, cursor)
     data = fetch_with_retry(base_url, params)
     
     if data is None:
-        logging.error("⛔ API call failed.")
+        logging.error("API call failed.")
         consecutive_failures += 1
         if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-            logging.error("🚨 Troppe query fallite consecutive. Arresto script.")
+            logging.error("Too many consecutive failed queries. Stop script.")
             break
         continue
 
     items = data.get("items", [])
     if not items:
-        logging.warning("⚠️ Nessun oggetto restituito. Cambio provider.")
-        # Aggiorna subito lo stato per passare al prossimo provider
+        logging.warning("No items returned. Provider change.")
+        # Update the status immediately to move on to the next provider.
         state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
         break
 
-    # Processa gli items
+    # Process items
     for item in items:
         guid = item.get("guid", "")
         if not guid or guid in downloaded_guids:
@@ -190,24 +191,24 @@ while pages_fetched < MAX_PAGES_PER_HOUR:
             logging.error(f"Kafka send error: {e}")
 
     producer.flush()
-    logging.info(f"✅ Salvati {saved_this_round} nuovi oggetti (pagina {pages_fetched + 1})")
+    logging.info(f" Saved {saved_this_round} new objects (page {pages_fetched + 1})")
 
-    # Aggiorna il cursore per la prossima pagina
+    # Update the cursor for the next page
     cursor = data.get("nextCursor")
     if not cursor:
-        logging.info("🛑 Fine dello scrolling: nessun nextCursor restituito.")
+        logging.info("End of scrolling: no nextCursor found.")
         break
 
     pages_fetched += 1
 
-    # Aggiungi un piccolo delay per non sovraccaricare l'API
+    # Add a small delay to avoid overloading the API.
     time.sleep(2)
 
-# Se finito o interrotto → passa al prossimo provider
+# If finished or interrupted → go to next provider.
 state["provider_index"] = (state["provider_index"] + 1) % len(PROVIDERS)
-logging.info(f"➡️ Prossima volta useremo provider '{PROVIDERS[state['provider_index']]}'")
+logging.info(f" Next time will use provider '{PROVIDERS[state['provider_index']]}'")
 
-# --- Salva stato e guid ---
+# --- saves state and guid ---
 with open(OFFSET_FILE, "w") as f:
     json.dump(state, f)
 
@@ -215,4 +216,4 @@ with open(downloaded_guids_file, "w") as f:
     for guid in downloaded_guids:
         f.write(f"{guid}\n")
 
-logging.info(f"🏁 Script completato. Totale oggetti salvati: {total_saved}")
+logging.info(f"Script completed. Total saved objects: {total_saved}")

@@ -8,7 +8,7 @@ The system is structured around a modular data pipeline, and these producers rep
 
 Our system is designed with the scenario of a **museum** or **heritage institution** self-uploading its metadata and images. Since real ingestion from cultural partners is not feasible in this prototype, we simulate it in two ways:
 
-- The **Europeana producer** fetches metadata from the [Europeana API](https://pro.europeana.eu/page/apis), mimicking ingestion from external cultural providers.
+- The **Europeana producer** fetches metadata from the [Europeana API](https://pro.europeana.eu/page/apis), mimicking ingestion from external cultural providers (See "How to Run" section on the main README).
 - The **Annotation producer** simulates user-generated content (for example tags and comments) on existing objects.
 
 ---
@@ -119,7 +119,8 @@ The system assumes the presence of:
 - Europeana scraping is purposefully lightweight and avoids downloading images. All image references are stored as URLs (`image_url`).
 - The current architecture assumes append-only, immutable ingestion in the RAW layer.
 - In the future, we could:
-  - Enable full provider traversal by dynamically chaining scroll sessions, to get more metadata
+  - Add other sources of images and metadata other then Europeana
+  - Use annotations sources such as Wikipedia media archives and real user-generated content from social platforms
   - Add image download as a separate batch process, to keep track of everything in the raw layer
 
 ---
@@ -147,4 +148,4 @@ kafka-producers/
 ```
 
 - The `.env` file stores sensitive configuration (such as your Europeana API key) and is **excluded from version control** (`.gitignore`).
-- Make sure to create your own `.env` in `europeana-ingestion/` with: API_KEY=your_europeana_api_key  
+- Make sure to create your own `.env` in `europeana-ingestion/` with: API_KEY="your_europeana_api_key"

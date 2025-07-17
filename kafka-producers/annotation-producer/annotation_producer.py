@@ -1,7 +1,6 @@
 # producer Kafka:
-# Spark legge la lista di guid (gli ID degli artefatti) da MinIO.
-# KafkaProducer genera (produce) a intervalli regolari eventi di “user_annotation” sul topic kafka user_annotations.
-
+# Spark reads the guid list (the artifact IDs) from MinIO.
+# KafkaProducer generates (produces) at regular intervals “user_annotation” events on topic kafka user_annotations.
 import json
 import time
 import random
@@ -28,8 +27,8 @@ guids = (spark.read.format("delta")
 spark.stop()
 
 if not guids:
-    raise RuntimeError("Nessun GUID caricato da MinIO! Controlla credenziali e path.")
-print(f"[AnnotationProducer] Caricati {len(guids)} GUID unici da MinIO.")
+    raise RuntimeError("No GUID uploaded by MinIO! Check credentials and path.")
+print(f"[AnnotationProducer] Loaded {len(guids)} Unique GUIDs from MinIO.")
 
 
 
@@ -43,7 +42,10 @@ user_ids =[f"user{i:04d}" for i in range(1, 401)] + [
     "artefatto90", "louvrefan", "duomofreak", "restauratore75", "collezionista33",
     "historygeek", "antiquarian", "culturalbuff", "docentX", "digitalcurator", "pippo",
     "pluto", "paperino", "mickeymouse", "donaldduck", "pippofranco", "marco", "franco", "andrea",
-    "laura", "sara", "elisa", "giovanni", "gianni morandi", "nathan", "francesca2", "filippo"
+    "laura", "sara", "elisa", "giovanni", "nathan", "francesca2", "filippo", "alessandro", "maria", "giulia",
+    "luca", "matteo", "chiara", "valentina", "federico", "giuseppe", "antonio", "roberto", "stefano", "claudia",
+    "martina", "silvia", "gabriele", "alessia", "riccardo", "francesco", "elena", "michele", "sara2", "giovanna", "paolo", "loredana",
+    "caterina", "alberto", "giulia2", "federica", "andrea2", "marta", "simone", "valerio", "chiara2", "giacomo"
 ]
 
 tags_pool = [
@@ -60,14 +62,16 @@ tags_pool = [
 ]
 
 comments_pool = [
-    "Opera ben conservata.", "Interessanti dettagli incisi.", "Colori vivaci e luminosi.",
-    "La cornice è in stile originale.", "Restauro evidente nella parte superiore.",
-    "L’opera presenta segni del tempo.", "Tipico dell’arte bizantina.", "Sembra provenire da una scuola veneziana.",
-    "La doratura è ancora brillante.", "Intaglio molto fine.", "Molto simile ad altri oggetti barocchi.",
-    "Attribuzione incerta.", "Possibile datazione al XIV secolo.", "Soggetto religioso classico.",
-    "Forse parte di un trittico perduto.", "Stile influenzato dal gotico tedesco.",
-    "Utilizzo di pigmenti naturali evidente.", "Forma inconsueta rispetto all'epoca.",
-    "Tracce di pittura sovrapposta.", "Restauro moderno visibile sul lato sinistro."
+    "Well-preserved work.", "Interesting engraved details.", "Bright and vivid colors.",
+ "The frame is in the original style.", "Restoration evident at the top.",
+ "The work shows signs of time.", "Typical of Byzantine art.", "Appears to be from a Venetian school.",
+ "The gilding is still bright.", "Very fine carving. ", "Very similar to other Baroque objects.",
+ "Uncertain attribution.", "Possible dating to the 14th century.", "Classical religious subject.",
+ "Possibly part of a lost triptych.", "Style influenced by German Gothic.",
+ "Use of natural pigments evident.", "Unusual form compared to the period.",
+ "Traces of overlapping painting.", "Modern restoration visible on left side.", "The background is very detailed.",
+ "The subject is very expressive.", "The frame is very ornate.", "The colors are still vibrant.",
+ "The work is very detailed.", "The subject is very dynamic.", "The frame is very simple."
 ] + [f"Simulated comment n. {i}" for i in range(130)] + ["Amazing detail on this sculpture.",
     "Looks like late Baroque style.", "Still vibrant after all these years.",
     "Possibly restored in recent decades.","One of the most beautiful pieces I've seen.",
@@ -152,5 +156,5 @@ while True:
         "location": random.choice(locations_pool)
     }
     producer.send(KAFKA_TOPIC, annotation)
-    print("Pubblicata:", annotation)
-    time.sleep(0.4)  # Attendi x secondi tra le pubblicazioni
+    print("Published:", annotation)
+    time.sleep(0.4)  # Wait x seconds between publications

@@ -1,14 +1,3 @@
-# ogni 6 ore Questo script:
-# legge le keyword da queries.txt 
-# Controlla da dove deve ripartire (offset.txt)
-# Seleziona solo 2 query
-# per ogni query, fa una chiamata all’API Europeana
-# estrae tot item per query (puoi modificare rows=..)
-# costruisce un dizionario JSON con i metadati (titolo, immagine, GUID…)
-# invia ogni JSON su Kafka → topic: europeana_metadata
-# Aggiorna offset.txt con la nuova posizione
-# Aspetta .. ore
-
 import time 
 import subprocess
 import logging
@@ -41,11 +30,11 @@ def run_script_with_retries():
     logging.error(" Script failed after %d attempts. Skipping this round.", MAX_RETRIES)
     return False
 
-# Loop infinito
+# Loop infinite
 while True:
     success = run_script_with_retries()
     if success:
-        logging.info(" Sleeping for ... minutes before next execution...")
+        logging.info(" Sleeping for {WAIT_AFTER_SUCCESS} minutes before next execution...")
         time.sleep(WAIT_AFTER_SUCCESS)
     else:
         logging.info(" Will retry from scratch in next cycle.")
