@@ -1,102 +1,117 @@
-# Cultural-heritage-bigdata-project
+# 📚 Cultural Heritage Big Data Pipeline
+
+## 1. Overview
+> Breve introduzione al progetto: obiettivo, ambito applicativo, tecnologie principali.
 
 This project aims to design and prototype a big data system that supports the digitization, analysis, and exploration of large-scale cultural heritage collections. These include artifacts, manuscripts, images, and user-contributed metadata from museums, libraries, and historical archives.
 
-This project sets up a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It supports user-generated content via MQTT, ingestion to Kafka, and streaming processing with Spark to MinIO.
-
-## Setup Scripts
-
-Questa cartella contiene gli script da eseguire a mano o automaticamente per configurare:
-
-- Spark jars: `setup_jars.sh`
-⚠️ Prima di lanciare docker-compose, eseguire lo script:
-
-bash
-
-bash setup/setup_jars.sh
-Questo scaricherà automaticamente i connettori Spark–Kafka richiesti nella cartella ./jars.
-
-
-
-## spark-apps/
-
-This folder is shared with the Spark container. It includes:
-
-- `spark_stream.py`: consumes Kafka messages and writes Parquet to MinIO
-- `europeana_ingest.py`: fetches images and metadata from Europeana and uploads them to MinIO
-- `multi_ingest.py`: reads queries.txt and triggers ingestion for each query
-- `queries.txt`: list of topics to ingest from Europeana
-
-
-
-##  How to Run the System
-
-### 1. Start the infrastructure
-Make sure you're in the root of the project and run:
-
-```bash
-docker-compose up --build
-```
-
-This starts:
-- Mosquitto MQTT broker
-- Kafka + Zookeeper
-- Spark master and worker
-- MinIO storage
-- Redis, PostgreSQL
-- MQTT-Kafka bridge container
-
+This project sets up a full data pipeline for collecting, ingesting, processing, and serving cultural heritage data. It simulates users interaction , ingestion to Kafka, and processing with Spark to MinIO, utilized as a data lake with Delta Lake Architecture. 
+This system performs analytics, deduplication and recommendations, and it also enables easy exploration and retrieval of cultural content.
 ---
 
-### 2. Start Spark streaming job to write to MinIO
+## 2. System Architecture
 
-In another terminal, run the following inside the spark-master container:
+### 2.1 Layered Architecture Overview
+> Diagramma logico dei sei layer (Ingestion → Serving) con una breve descrizione per ciascuno.
 
-```bash
-docker exec -it spark-master spark-submit /opt/spark-apps/ingestion/kafka_to_raw.py
-```
+### 2.2 Data Flow Diagram
+> Rappresentazione visiva del flusso end-to-end dei dati.
 
-This will:
-- Listen to `heritage_annotations` topic on Kafka
-- Save all user-generated content as JSON files in `heritage/raw/metadata/` on MinIO
+### 2.3 File structure
 
+lll
 ---
 
-### 3. Simulate user-generated content
+## 3. Data Sources
 
-To test the ingestion pipeline, run:
+### 3.1 Europeana Metadata
+> Descrizione delle query, campi chiave, struttura JSON.
 
-```bash
-python scripts/simulate_user_input.py
-```
-
-This will:
-- Generate a fake user annotation (object ID, tags, comment)
-- Publish it to the MQTT topic `heritage/annotations`
-- Be bridged into Kafka and processed by Spark
-
+### 3.2 User Annotations (Synthetic)
+> Come vengono generate, struttura dei messaggi, scopo.
+iujn
 ---
 
-### 4. Check output in MinIO
-
-Go to [http://localhost:9001](http://localhost:9001)
-
-- Username: `minioadmin`
-- Password: `minioadmin`
-
-You should find JSON files under:
-```
-heritage/raw/metadata/
-```
-
+## 4. Technologies Used
+> Tabella o elenco con: tecnologia – ruolo – motivazione.
+iojioj
 ---
 
-## 📂 Directory Structure
+## 5. Pipeline Stages
 
-Key folders:
+### 5.1 Ingestion Layer
+- Kafka producers
+- Europeana API fetch
+- Annotation generator
 
-- `spark-apps/ingestion/kafka_to_raw.py` — streaming job for ingestion
-- `scripts/simulate_user_input.py` — simulates user crowdsourcing
-- `mqtt-kafka-bridge/` — container to forward MQTT → Kafka
-- `storage/minio/` — MinIO local storage
+### 5.2 Raw Storage
+- Salvataggio JSON su MinIO
+- Strategie di partizionamento e batching
 
+### 5.3 Cleansing Layer
+- Validazione
+- Normalizzazione
+- Output in Delta Lake
+
+### 5.4 Machine Learning Model
+- CLIP embedding (image + text)
+- Salvataggio su Qdrant
+- Deduplicazione semantica
+
+### 5.5 Join to Curated Layer
+- Join tra oggetti Europeana e annotazioni
+- Uso di canonical_id
+- Output finale (Delta + PostgreSQL)
+
+### 5.6 Serving Layer
+- PostgreSQL per dashboard e query
+- Qdrant per recommendation
+- Streamlit UI
+min
+---
+
+## 6. How to Run
+
+### 6.1 Docker Compose Setup
+> Spiegazione dei servizi, volumi, reti.
+
+### 6.2 Environment Variables
+> API keys, endpoint, accesso a MinIO/Postgres/Qdrant.
+
+### 6.3 Build & Run Commands
+> Comandi principali per avviare il sistema.
+yhbh
+---
+
+## 7. Example Usage
+
+### 7.1 Dashboard Features
+> Esplorazione, filtri, similar images, dettagli.
+
+### 7.2 Query Examples
+> Query su PostgreSQL (es. filtra per autore)  
+> Query su Qdrant (es. simili per embedding)
+btgb
+---
+
+## 8. Results & Evaluation
+> Dati sulla deduplicazione, numero oggetti ingestiti, performance.
+iuhy
+---
+## 9. Lessons Learned
+> Cosa ha funzionato, cosa no, insight tecnici.
+hjù
+---
+## 10. Limitations & Future Work
+> Cosa manca, cosa può essere migliorato, estensioni possibili.
+fghjk
+---
+## 11. References & Acknowledgments
+> Fonti tecniche, API, paper, ringraziamenti.
+gfhj
+---
+
+## 12. Authors & Contact
+> Nomi, email, corso, anno, docente.
+fghj
+---
