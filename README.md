@@ -55,29 +55,8 @@ Europeana metadata is collected using the `europeana_ingest_batch.py` script, wh
 - `isShownAt`: Link to the object page on the provider's website
 - `edm_rights`: Rights in EDM schema
 
-**Example JSON structure:**
-
-```json
-{
-  "title": "Portrait of a Woman",
-  "guid": "2021401/https___data.europeana.eu_item_12345",
-  "image_url": "https://europeanaphotos.org/img/123.jpg",
-  "timestamp_created": "2025-07-09T08:43:12",
-  "provider": "europeana_provider_id",
-  "description": "A beautiful portrait from the Renaissance era.",
-  "creator": "Anonymous Italian painter",
-  "subject": ["portrait", "woman", "renaissance"],
-  "language": "en",
-  "type": "IMAGE",
-  "format": "image/jpeg",
-  "rights": "© Europeana",
-  "dataProvider": "Museo Nazionale Virtuale",
-  "isShownBy": "https://europeanaphotos.org/img/123.jpg",
-  "edm_rights": "http://rightsstatements.org/vocab/InC/1.0/"
-}
-
-
 --- 
+
 ### 3.2 User Annotations (Synthetic)
 
 Synthetic user annotations are generated automatically using the `annotation_producer.py` script. The purpose is to simulate user engagement such as tagging, commenting, and localization on cultural heritage objects.
@@ -96,18 +75,6 @@ Each user annotation is sent to the Kafka topic `user_annotations` as a JSON obj
 - `timestamp`: Annotation creation time (UTC, ISO format)
 - `location`: User’s city or region 
 
-**Sample Annotation Message**
-
-```json
-{
-  "guid": "2021401/https___data.europeana.eu_item_12345",
-  "user_id": "user_42",
-  "tags": ["portrait", "woman", "renaissance"],
-  "comment": "This painting reminds me of early Italian masters.",
-  "timestamp": "2025-07-10T10:32:45",
-  "location": "Verona"
-}
-```
 ---
 
 ## 4. Technologies Used
@@ -149,11 +116,6 @@ We chose Delta Lake on MinIO to ensure scalable, schema-aware storage with built
 In this layer, data is consumed from Kafka and written to MinIO in append-only JSON format using Spark Structured Streaming. Europeana metadata is stored as one file per record, while user annotations are aggregated into a single file per batch and partitioned by date. 
 
 ### 5.3 Cleansing Layer
-- Validazione
-- Normalizzazione
-- Output in Delta Lake
-
-### 5.3 Cleansing Layer
 
 In this layer, raw data is validated, cleaned, and transformed into Delta Tables stored on MinIO. We use Spark in batch mode to process both Europeana metadata and user-generated content. 
 
@@ -161,7 +123,7 @@ For user annotations, the cleansing job reads JSON files from the raw layer, val
 
 For Europeana metadata, the job reads the JSON files, filters out malformed or incomplete records (e.g., null `guid` or missing `image_url`), removes duplicates on `guid`, and then writes the cleaned results in Delta format.
 
-For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance. In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
+For this job, we initially used an `overwrite` strategy to fully replace the cleansed Europeana table at each run. Since this approach is computationally expensive and not optimized for frequent batch updates, we switched to a Delta `MERGE` strategy that incrementally inserts only new records based on `guid`, to improve the overall performance (you can find both scripts in the `eu-to-cleansed/` folder, and you can decide the one to run in the file `scheduler.py` in the same folder). In the future, the use of Delta Lake's `OPTIMIZE` command could enhance storage efficiency and query performance by compacting small files.
 
 ### 5.4 Machine Learning Model
 - CLIP embedding (image + text)
@@ -174,23 +136,33 @@ For this job, we initially used an `overwrite` strategy to fully replace the cle
 - Join tra oggetti Europeana e annotazioni
 - Uso di canonical_id
 - Output finale (Delta + PostgreSQL)
+- SILVIA FARE JOIN
 
 ### 5.6 Serving Layer
-- PostgreSQL per dashboard e query
-- Qdrant per recommendation
-- Streamlit UI
+
+The final Spark job reads the joined Delta table from the curated layer, selects and maps the key fields (e.g., `guid`, `user_id`, `title`, etc.), and writes the results to a PostgreSQL table. This step prepares the data for downstream usage, including dashboard visualization and structured SQL querying.
+
+PostgreSQL is not used as our storage layer (this role is done by MinIO), but it works as a relational interface that supports efficient access to curated metadata from the dashboard.
+
+The interactive dashboard, built with Streamlit ([http://localhost:8501/](http://localhost:8501/)), allows users to:
+- Explore a random selection of images from the ingested collections
+- Apply filters to search metadata (e.g., by creator, data provider, or tags)
+- View user annotations alongside cultural metadata
+
+The recommendation system is implemented in Streamlit: when a user selects an image, the system sends a request to Qdrant, which retrieves the top 10 most similar images based on cosine similarity of the `combined` embedding vector. This embedding captures both visual and textual semantics of the object, enabling cross-modal recommendations that consider both content and context.
 
 ---
 
 ## 6. How to Run
+
 **PREREQUISITES**
 Before starting the project, ensure the following requirements are met:
 
 - **Docker and Docker Compose installed** on your machine  
   - [Get Docker](https://docs.docker.com/get-docker/)  
   - [Get Docker Compose](https://docs.docker.com/compose/install/)
-- **`.env` file placed in the `kafka-producers/europeana-ingestion/` folder**  
-  - This file should contain your Europeana API key and any custom environment variables required (e.g., `API_KEY=your_key_here`)
+- **create a file `.env`** (already ignored in the `gitignore`). You need to place this file in the `kafka-producers/europeana-ingestion/` folder. 
+  - This file should contain your Europeana API Key (that you need to request [here](https://pro.europeana.eu/page/get-api)), stored like this `API_KEY=your_key_here`.
 
 **RECOMMENDED**
 - **At least 12 GB RAM available**
@@ -200,29 +172,27 @@ Before starting the project, ensure the following requirements are met:
 
     1. Clone the repo: git clone https://github.com/dieccoo/Cultural-heritage-bigdata-project
 
-    2. The `.env` file stores sensitive configuration (such as your Europeana API key) and is **excluded from version control** (`.gitignore`).
-        - Make sure to create your own `.env` in `kafka-producers/europeana-ingestion/` with: API_KEY=your_europeana_api_key  
+    2. Make sure you've created the `.env` file, storing your Europeana API key in the right directory (`kafka-producers/europeana-ingestion/`)
 
     3. Once inside the Cultural-heritage-bigdata-project directory run:   docker compose up --build –d  
 
 ### 6.1 Services, Volumes, and Network
 
 - **Network**
-  All containers are connected via a shared Docker network called **heritage-net**.  
+  All containers are connected via a shared Docker network (**heritage-net**).  
   This network allows secure communication between services using service names.
 
 - **Service dependencies**:  
-  Several containers depend on others to start correctly (e.g., Kafka depends on Zookeeper, Spark jobs wait for MinIO and Kafka to be up, the dashboard waits for PostgreSQL and Qdrant). Docker Compose manages these dependencies to ensure correct startup order.
+  Several containers depend on others to start correctly (e.g., Kafka depends on Zookeeper, Spark jobs wait for MinIO and Kafka to be up, Streamlit waits for PostgreSQL and Qdrant). Docker Compose manages these dependencies to ensure correct startup order.
 
 - **Volumes**:  
   Docker named volumes are used for data persistence. This means storage for MinIO, PostgreSQL, Qdrant, and shared intermediate data remains safe even if you restart or update containers. Without these volumes, your data would be lost at every restart.
 
 - **Note on the dashboard**:  
-  The Streamlit dashboard does **not automatically refresh** when you refresh the page.  
-  **To see updated results, restart the dashboard container** with:
+  You can access the dashboard via [http://localhost:8501/](http://localhost:8501/). Be careful if you run all services simoultaneously, if you want to see the updated results on the dashboard you don't have to **refresh** the page, but you have to **restart** the `Streamlit` container with:
   ```sh
   docker compose restart streamlit
-
+    ```
 ---
 
 ## 7. Example Usage
