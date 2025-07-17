@@ -1,6 +1,6 @@
 # Cultural Heritage Project
 
-Welcome to the documentation of our Cultural Heritage Big Data Project.  
+Welcome to our Cultural Heritage Big Data Project.  
 This document provides a comprehensive overview of the system architecture, technologies used, and implementation details of our pipeline for processing and exploring cultural heritage data.
 
 ## Table of Contents
