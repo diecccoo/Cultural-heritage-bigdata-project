@@ -148,7 +148,7 @@ To llustrate how Qdrant  organizes and retrieves embeddings, we recorded a short
 - **Interactive exploration**: clicking on a purple node shows its associated metadata (`guid`, `canonical_id`, `status`, etc. that can be seen on the right) in the payload panel. Green nodes represent similar items retrieved in real-time.
 - **Similarity search expansion**: dragging the graph reveals clusters of related items, visualizing how Qdrant builds neighborhoods based on embedding distance.
 
-![Qdrant Demo Video](readme_images/qdrant.mp4)
+![Qdrant Demo Video](readme_images/qdrant.gif)
 
 
 ### 5.5 Join to Curated Layer
