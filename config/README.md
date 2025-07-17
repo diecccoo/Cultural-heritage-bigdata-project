@@ -145,8 +145,6 @@ Both tables share the same schema:
 
 ### Accessing PostgreSQL via pgAdmin 
 
-.
-
 ### Prerequisites 
 - Docker and Docker Compose installed and running
 - Services `postgres` and `pgadmin` must be active (`docker compose up -d`)
@@ -187,7 +185,9 @@ Click `Save` to connect.
 
 If the server doesn't appear, right-click on `Servers` and choose `Refresh`.
 
+
 **Integration with Streamlit**
+
 The Streamlit dashboard connects to this table (join_metadata_deduplicated) in the heritage database to power all visualizations, filters (currently by creator, provider, tags), and search features.
 
 ---
@@ -205,7 +205,7 @@ config/
 │   └── Dockerfile                   # Container used to run MinIO initialization
 │
 ├── postgres/
-│   └── init.sql                     # Initializes join_metadata_deduplicated table in PostgreSQL
+│   └── init.sql                     # Initializes tables in PostgreSQL
 │
 └── README.md
 ---
