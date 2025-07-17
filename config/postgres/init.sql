@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS join_metadata_deduplicated (
     type TEXT
 );
 
--- Copia identica per staging
+-- Identical copy for staging
 CREATE TABLE IF NOT EXISTS join_metadata_staging (
     id SERIAL PRIMARY KEY,
     guid TEXT,

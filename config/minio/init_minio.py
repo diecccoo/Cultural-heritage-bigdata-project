@@ -3,7 +3,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 # ---------------- Configuration ----------------
-MINIO_ENDPOINT = "http://minio:9000"  # container name, non localhost!
+MINIO_ENDPOINT = "http://minio:9000"  
 ACCESS_KEY = "minio"
 SECRET_KEY = "minio123"
 BUCKET_NAME = "heritage"

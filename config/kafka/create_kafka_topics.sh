@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Script per creare automaticamente i topic Kafka
-# Usato nel container 'kafka-init'
+# Script to automatically create Kafka topics.
+# Used in the ‘kafka-init’ container.
 
 KAFKA_BROKER="kafka:9092"
 
-# Funzione per creare un topic con nome, partizioni e repliche
+# Function to create a topic with name, partitions and replies
 create_topic() {
   TOPIC=$1
   PARTITIONS=$2
@@ -23,7 +23,7 @@ create_topic() {
 }
 
 
-# create_topic "nome_topic" numero_partizioni numero_repliche
+# create_topic "nome_topic" num partitions num replicas
 create_topic "user_annotations" 1 1 
 create_topic "europeana_metadata" 1 1
 
@@ -31,12 +31,12 @@ create_topic "europeana_metadata" 1 1
 echo " Waiting for Kafka to become ready..."
 
 
-# Attendi che i topic siano creati
+# Wait for topics to be created
 echo "Waiting for topics to be created..."
 until /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server $KAFKA_BROKER --list >/dev/null 2>&1; do
   sleep 5
 done      
-# Verifica la creazione dei topic
+# Verify topic creation
 echo "Listing all topics..."
 /opt/bitnami/kafka/bin/kafka-topics.sh \
   --bootstrap-server $KAFKA_BROKER \
