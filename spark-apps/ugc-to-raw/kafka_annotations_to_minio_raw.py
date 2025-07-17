@@ -1,12 +1,12 @@
-# Questo script:
-# Legge messaggi JSON dal topic Kafka chiamato user_annotations
-# Scrive i dati (in formato JSON) in MinIO nel layer raw
-# Partiziona per dt=YYYY-MM-DD, salva 1 file per batch, ogni 30 secondi
+# This script:
+# Reads JSON messages from the Kafka topic called user_annotations.
+# Writes data (in JSON format) to MinIO in the raw layer.
+# Partitions by dt=YYYY-MM-DD, saves 1 file per batch, every 30 seconds.
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import current_timestamp, current_date, lit
 
-print("[INFO] Inizializzazione SparkSession con accesso MinIO...")
+print("[INFO] SparkSession initialization with MinIO access...")
 spark = SparkSession.builder \
     .appName("KafkaToMinIO_RAW_JSON") \
     .config("spark.hadoop.fs.s3a.access.key", "minio") \
@@ -15,9 +15,9 @@ spark = SparkSession.builder \
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
     .config("spark.hadoop.fs.s3a.path.style.access", "true") \
     .getOrCreate()
-print("[INFO] SparkSession creata.")
+print("[INFO] SparkSession created.")
 
-print("[INFO] Connessione a Kafka (topic: user_annotations)...")
+print("[INFO] Connection to Kafka (topic: user_annotations)...")
 df_raw = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka:9092") \
@@ -25,13 +25,13 @@ df_raw = spark.readStream \
     .option("startingOffsets", "latest") \
     .load()
 
-print("[INFO] Parsing e aggiunta metadati...")
+print("[INFO] Parsing and adding metadata...")
 df_parsed = df_raw.selectExpr("CAST(value AS STRING) as value") \
     .withColumn("ingestion_time", current_timestamp()) \
     .withColumn("source", lit("kafka:user_annotations")) \
     .withColumn("dt", current_date())
 
-print("[INFO] Avvio scrittura JSON su MinIO (coalesce(1), batch ogni 30s)...")
+print("[INFO] Start JSON write to MinIO (coalesce(1), batch every 30s)...")
 query = df_parsed.coalesce(1).writeStream \
     .format("json") \
     .option("path", "s3a://heritage/raw/metadata/user_generated_content/") \
@@ -41,5 +41,5 @@ query = df_parsed.coalesce(1).writeStream \
     .trigger(processingTime="30 seconds") \
     .start()
 
-print("[INFO] Scrittura avviata. In attesa di eventi...")
+print("[INFO] Writing initiated. Pending events...")
 query.awaitTermination()
