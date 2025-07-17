@@ -16,6 +16,9 @@ A shell script executed in a Kafka container to create the required topics at st
 
 Each topic is created with **1 partition** and **1 replica**, using the `kafka-topics.sh` CLI tool.
 
+When using the create_kafka_topics.sh script, please ensure that the file uses Unix-style line endings (LF).
+This is especially important if you're working on Windows, where text editors may default to Windows-style line endings (CRLF), which can cause unexpected behavior such as syntax errors (^M visible in shell).
+
 ### `kafka/server-1.properties`
 
 Kafka broker configuration file mounted inside the Kafka container to customize its behavior. Key settings include:
@@ -107,18 +110,42 @@ Custom Dockerfile used to build the container that runs `init_minio.py`. This en
 ## PostgreSQL 
 
 ### `postgres/init.sql`
-SQL script automatically executed when the PostgreSQL container starts for the first time. It currently creates the following table:
+SQL script automatically executed when the PostgreSQL container starts for the first time. 
+The `heritage` database includes two key tables used for storing curated data after the join between Europeana metadata and user-generated annotations deduplicated:
 
-- `join_metadata_deduplicated` – used in the **serving layer** to store cleaned and joined Europeana metadata and user annotations.
-Fields include all relevant metadata (guid, title, creator, description, etc.) and user annotation information (user_id, tags, comment, timestamp, etc.).
-The structure is designed to match the output of the Spark join pipeline, ensuring smooth downstream integration.
+#### 📌 `join_metadata_deduplicated`
+This is the **main serving table** containing cleaned, deduplicated, and joined data. Each row represents a single user annotation and the associated cultural metadata.
+
+#### 📥 `join_metadata_staging`
+A **temporary staging table**, used during batch insertions and merge operations before data is validated and moved to the main table.
+
+Both tables share the same schema:
+
+| Column Name   | Type      | Description                                              |
+|---------------|-----------|----------------------------------------------------------|
+| `id`          | SERIAL    | Auto-incremented primary key                            |
+| `guid`        | TEXT      | Original Europeana object identifier                    |
+| `user_id`     | TEXT      | Identifier of the user who submitted the annotation     |
+| `tags`        | TEXT[]    | List of tags assigned by the user                       |
+| `comment`     | TEXT      | User's textual comment                                  |
+| `timestamp`   | TIMESTAMP | Timestamp of the annotation                             |
+| `source`      | TEXT      | Source of ingestion (e.g., `kafka:user_annotations`)    |
+| `creator`     | TEXT      | Author of the object                                    |
+| `description` | TEXT      | Metadata field from Europeana                           |
+| `edm_rights`  | TEXT      | Copyright/licensing information                         |
+| `format`      | TEXT      | Format of the cultural object                           |
+| `image_url`   | TEXT[]    | Array of image URL associated with the object           |
+| `isshownby`   | TEXT[]    | Additional image or media links                         |
+| `language`    | TEXT      | Language of the object                                  |
+| `provider`    | TEXT      | Provider or institution source                          |
+| `subject`     | TEXT[]    | Array of subjects / keywords                            |
+| `title`       | TEXT      | Title of the cultural object                            |
+| `type`        | TEXT      | Type/category (e.g., image, text, video)                |
+
 
 **Integration with Streamlit**
-The Streamlit dashboard connects to this table (join_metadata_deduplicated) in the heritage database to power all visualizations, filters, and search features.
-Fields include:
+The Streamlit dashboard connects to this table (join_metadata_deduplicated) in the heritage database to power all visualizations, filters (currently by creator, provider, tags), and search features.
 
-User annotation info: 
-Metadata: 
 ---
 
 ## File Structure
